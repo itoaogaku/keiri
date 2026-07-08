@@ -24,7 +24,8 @@ export default function InvoiceDetail() {
   }
 
   const customer = getCustomer(inv.customerId)
-  const t = computeTotals(inv.items)
+  const t = computeTotals(inv.items, inv.issuer.taxMode)
+  const exempt = inv.issuer.taxMode === 'exempt'
 
   return (
     <div>
@@ -94,13 +95,16 @@ export default function InvoiceDetail() {
             </div>
           </div>
           <div className="text-sm text-slate-600">
-            <div className="font-semibold text-slate-800">{inv.issuer.companyName}</div>
-            <div>{inv.issuer.address}</div>
-            <div>TEL: {inv.issuer.tel}</div>
-            <div>{inv.issuer.email}</div>
-            <div className="mt-2 text-slate-500">
-              登録番号：{inv.issuer.registrationNumber}
-            </div>
+            <div className="font-semibold text-slate-800">{inv.issuer.name}</div>
+            {inv.issuer.address && <div>{inv.issuer.address}</div>}
+            {inv.issuer.tel && <div>TEL: {inv.issuer.tel}</div>}
+            {inv.issuer.email && <div>{inv.issuer.email}</div>}
+            {inv.issuer.registrationNumber && (
+              <div className="mt-2 text-slate-500">
+                登録番号：{inv.issuer.registrationNumber}
+              </div>
+            )}
+            {exempt && <div className="mt-1 text-slate-500">※ 非課税取引</div>}
           </div>
         </div>
 
@@ -132,25 +136,34 @@ export default function InvoiceDetail() {
         <div className="mt-6 flex justify-end">
           <div className="w-72 space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-600">
-              <span>小計（税抜）</span>
+              <span>{exempt ? '合計金額（税抜）' : '小計（税抜）'}</span>
               <span>{yen(t.subtotal)}</span>
             </div>
-            {t.netByRate[10] > 0 && (
+            {exempt ? (
               <div className="flex justify-between text-slate-500">
-                <span>10%対象 {yen(t.netByRate[10])}</span>
-                <span>消費税 {yen(t.taxByRate[10])}</span>
+                <span>消費税</span>
+                <span>非課税</span>
               </div>
+            ) : (
+              <>
+                {t.netByRate[10] > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>10%対象 {yen(t.netByRate[10])}</span>
+                    <span>消費税 {yen(t.taxByRate[10])}</span>
+                  </div>
+                )}
+                {t.netByRate[8] > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>8%対象 {yen(t.netByRate[8])}</span>
+                    <span>消費税 {yen(t.taxByRate[8])}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-600">
+                  <span>消費税合計</span>
+                  <span>{yen(t.taxTotal)}</span>
+                </div>
+              </>
             )}
-            {t.netByRate[8] > 0 && (
-              <div className="flex justify-between text-slate-500">
-                <span>8%対象 {yen(t.netByRate[8])}</span>
-                <span>消費税 {yen(t.taxByRate[8])}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-slate-600">
-              <span>消費税合計</span>
-              <span>{yen(t.taxTotal)}</span>
-            </div>
             <div className="flex justify-between border-t-2 border-slate-300 pt-2 text-lg font-bold text-slate-800">
               <span>合計</span>
               <span>{yen(t.total)}</span>

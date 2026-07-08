@@ -14,7 +14,7 @@ export default function Dashboard() {
   )
 
   const totalOf = (inv: (typeof data.invoices)[number]) =>
-    computeTotals(inv.items).total
+    computeTotals(inv.items, inv.issuer.taxMode).total
 
   const salesTotal = monthInvoices.reduce((s, i) => s + totalOf(i), 0)
   const paidTotal = data.invoices

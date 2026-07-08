@@ -4,7 +4,7 @@ const NAV = [
   { to: '/', label: 'ダッシュボード', icon: '📊', end: true },
   { to: '/invoices', label: '請求書', icon: '📄', end: false },
   { to: '/customers', label: '顧客一覧', icon: '👥', end: false },
-  { to: '/settings', label: '設定（請求元）', icon: '⚙️', end: false },
+  { to: '/settings', label: '請求者管理', icon: '⚙️', end: false },
 ]
 
 export default function Layout() {

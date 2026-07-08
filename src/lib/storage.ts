@@ -1,16 +1,61 @@
-import type { AppData, Customer, Invoice, IssuerInfo } from '../types'
+import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
 import { newId } from './invoice'
 
-const STORAGE_KEY = 'keiri.appdata.v1'
+const STORAGE_KEY = 'keiri.appdata.v2'
 
-const DEFAULT_ISSUER: IssuerInfo = {
-  companyName: '株式会社サンプル商事',
-  registrationNumber: 'T1234567890123',
-  address: '東京都千代田区丸の内1-1-1',
-  tel: '03-1234-5678',
-  email: 'info@example.co.jp',
-  bankInfo: '〇〇銀行 丸の内支店 普通 1234567',
-}
+/** 使い分け可能な5つの請求者プロファイル（初期値） */
+export const DEFAULT_ISSUERS: IssuerProfile[] = [
+  {
+    id: 'issuer-acc-kk',
+    name: '株式会社アスリートキャリアセンター',
+    taxMode: 'taxable',
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankInfo: '',
+  },
+  {
+    id: 'issuer-acc-shadan-exempt',
+    name: '一般社団法人アスリートキャリアセンター（非課税枠）',
+    taxMode: 'exempt',
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankInfo: '',
+  },
+  {
+    id: 'issuer-acc-shadan-taxable',
+    name: '一般社団法人アスリートキャリアセンター（課税枠）',
+    taxMode: 'taxable',
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankInfo: '',
+  },
+  {
+    id: 'issuer-hara-ds',
+    name: '株式会社原D&S',
+    taxMode: 'taxable',
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankInfo: '',
+  },
+  {
+    id: 'issuer-aogaku-tf',
+    name: '青山学院大学陸上競技部',
+    taxMode: 'taxable',
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankInfo: '',
+  },
+]
 
 /** 初回起動時のデモデータ */
 function seedData(): AppData {
@@ -35,15 +80,20 @@ function seedData(): AppData {
 
   const now = new Date()
   const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const dueEnd = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+  const taxableIssuer = DEFAULT_ISSUERS[0]
+  const exemptIssuer = DEFAULT_ISSUERS[1]
+
   const invoices: Invoice[] = [
     {
       id: newId(),
       invoiceNumber: `INV-${iso(now).replace(/-/g, '')}-001`,
       issueDate: iso(now),
-      dueDate: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+      dueDate: dueEnd,
       status: 'issued',
       customerId: customers[0].id,
-      issuer: { ...DEFAULT_ISSUER },
+      issuerId: taxableIssuer.id,
+      issuer: { ...taxableIssuer },
       items: [
         { id: newId(), name: 'Webサイト制作費', quantity: 1, unitPrice: 300000, taxRate: 10 },
         { id: newId(), name: '保守サポート（月額）', quantity: 3, unitPrice: 20000, taxRate: 10 },
@@ -56,13 +106,13 @@ function seedData(): AppData {
       id: newId(),
       invoiceNumber: `INV-${iso(now).replace(/-/g, '')}-002`,
       issueDate: iso(now),
-      dueDate: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+      dueDate: dueEnd,
       status: 'paid',
       customerId: customers[1].id,
-      issuer: { ...DEFAULT_ISSUER },
+      issuerId: exemptIssuer.id,
+      issuer: { ...exemptIssuer },
       items: [
-        { id: newId(), name: 'コンサルティング料', quantity: 10, unitPrice: 15000, taxRate: 10 },
-        { id: newId(), name: '資料印刷代（軽減税率）', quantity: 100, unitPrice: 200, taxRate: 8 },
+        { id: newId(), name: '講演料（非課税）', quantity: 1, unitPrice: 150000, taxRate: 10 },
       ],
       notes: '',
       createdAt: now.toISOString(),
@@ -70,13 +120,20 @@ function seedData(): AppData {
     },
   ]
 
-  return { customers, invoices, issuer: DEFAULT_ISSUER }
+  return { customers, invoices, issuers: DEFAULT_ISSUERS }
 }
 
 export function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as AppData
+    if (raw) {
+      const parsed = JSON.parse(raw) as AppData
+      // 請求者が空なら既定を補完（マイグレーション保険）
+      if (!parsed.issuers || parsed.issuers.length === 0) {
+        parsed.issuers = DEFAULT_ISSUERS
+      }
+      return parsed
+    }
   } catch {
     // 壊れたデータは無視して再シード
   }

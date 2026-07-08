@@ -10,6 +10,7 @@ import { computeTotals, lineNet } from '../lib/calc'
 import { yen } from '../lib/format'
 import {
   STATUS_LABELS,
+  TAX_MODE_LABELS,
   type Invoice,
   type InvoiceItem,
   type InvoiceStatus,
@@ -38,7 +39,7 @@ export default function InvoiceForm() {
       const src = getInvoice(copyFromId)
       if (src) return copyInvoice(src, data.invoices)
     }
-    return createBlankInvoice(data.invoices, data.issuer)
+    return createBlankInvoice(data.invoices, data.issuers[0])
     // 初回マウント時のみ算出（以降の入力で再生成させない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -53,11 +54,19 @@ export default function InvoiceForm() {
     }
   }, [copiedNotice])
 
-  const totals = computeTotals(form.items)
+  // 集計は選択中の請求者の課税区分（課税/非課税）に従う
+  const totals = computeTotals(form.items, form.issuer.taxMode)
 
   // ---- フィールド更新ヘルパ ----
   const set = <K extends keyof Invoice>(key: K, value: Invoice[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
+
+  // 請求者を切り替える。issuerId と snapshot(issuer) を同時に更新する
+  const selectIssuer = (issuerId: string) =>
+    setForm((f) => {
+      const profile = data.issuers.find((i) => i.id === issuerId)
+      return profile ? { ...f, issuerId, issuer: { ...profile } } : f
+    })
 
   const updateItem = (itemId: string, patch: Partial<InvoiceItem>) =>
     setForm((f) => ({
@@ -117,6 +126,27 @@ export default function InvoiceForm() {
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 font-semibold text-slate-800">基本情報</h2>
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-slate-500">
+                請求者（請求元）
+              </label>
+              <select
+                className={inputCls}
+                value={form.issuerId}
+                onChange={(e) => selectIssuer(e.target.value)}
+              >
+                {data.issuers.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}（{TAX_MODE_LABELS[i.taxMode]}）
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">
+                {form.issuer.taxMode === 'exempt'
+                  ? 'この請求者は非課税枠のため、消費税は計算されません。'
+                  : '課税枠：税率ごとに消費税を自動計算します。'}
+              </p>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">請求書番号</label>
               <input
@@ -271,20 +301,29 @@ export default function InvoiceForm() {
                 <span>小計（税抜）</span>
                 <span>{yen(totals.subtotal)}</span>
               </div>
-              {totals.netByRate[10] > 0 && (
+              {form.issuer.taxMode === 'exempt' ? (
                 <div className="flex justify-between text-slate-500">
-                  <span>10%対象 {yen(totals.netByRate[10])} の消費税</span>
-                  <span>{yen(totals.taxByRate[10])}</span>
+                  <span>消費税</span>
+                  <span>非課税</span>
                 </div>
-              )}
-              {totals.netByRate[8] > 0 && (
-                <div className="flex justify-between text-slate-500">
-                  <span>8%対象 {yen(totals.netByRate[8])} の消費税</span>
-                  <span>{yen(totals.taxByRate[8])}</span>
-                </div>
+              ) : (
+                <>
+                  {totals.netByRate[10] > 0 && (
+                    <div className="flex justify-between text-slate-500">
+                      <span>10%対象 {yen(totals.netByRate[10])} の消費税</span>
+                      <span>{yen(totals.taxByRate[10])}</span>
+                    </div>
+                  )}
+                  {totals.netByRate[8] > 0 && (
+                    <div className="flex justify-between text-slate-500">
+                      <span>8%対象 {yen(totals.netByRate[8])} の消費税</span>
+                      <span>{yen(totals.taxByRate[8])}</span>
+                    </div>
+                  )}
+                </>
               )}
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-800">
-                <span>合計（税込）</span>
+                <span>{form.issuer.taxMode === 'exempt' ? '合計' : '合計（税込）'}</span>
                 <span>{yen(totals.total)}</span>
               </div>
             </div>

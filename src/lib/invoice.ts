@@ -1,4 +1,4 @@
-import type { Invoice, InvoiceItem, IssuerInfo } from '../types'
+import type { Invoice, InvoiceItem, IssuerProfile } from '../types'
 import { compactDate, endOfMonth, toISODate } from './format'
 
 /** 簡易ユニークID */
@@ -30,10 +30,10 @@ function blankItem(): InvoiceItem {
   return { id: newId(), name: '', quantity: 1, unitPrice: 0, taxRate: 10 }
 }
 
-/** 空の新規請求書ドラフト（保存前・idは仮） */
+/** 空の新規請求書ドラフト（保存前・idは仮）。既定の請求者を割り当てる */
 export function createBlankInvoice(
   invoices: Invoice[],
-  issuer: IssuerInfo
+  issuer: IssuerProfile
 ): Invoice {
   const now = new Date()
   const nowIso = new Date().toISOString()
@@ -44,6 +44,7 @@ export function createBlankInvoice(
     dueDate: endOfMonth(now),
     status: 'draft',
     customerId: '',
+    issuerId: issuer.id,
     issuer: { ...issuer },
     items: [blankItem()],
     notes: '',
@@ -75,7 +76,8 @@ export function copyInvoice(
     dueDate: endOfMonth(base), // 当月末
     status: 'draft', // 下書きに戻す
     customerId: src.customerId, // 顧客を引き継ぐ
-    issuer: { ...src.issuer }, // 請求元を引き継ぐ
+    issuerId: src.issuerId, // 請求者を引き継ぐ
+    issuer: { ...src.issuer }, // 請求者スナップショットを引き継ぐ
     items: src.items.map((it) => ({ ...it, id: newId() })), // 明細をディープコピー
     notes: src.notes, // 備考を引き継ぐ
     createdAt: nowIso,

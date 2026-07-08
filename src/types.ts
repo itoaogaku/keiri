@@ -38,15 +38,34 @@ export interface InvoiceItem {
   taxRate: TaxRate
 }
 
-/** 請求元（自社）情報 — 設定画面で編集 */
-export interface IssuerInfo {
-  companyName: string
-  /** 適格請求書発行事業者登録番号（例：T1234567890123） */
+/**
+ * 課税区分。
+ * - taxable: 課税（消費税を計算・表示する）
+ * - exempt : 非課税枠（消費税を計算しない。合計＝税抜金額）
+ */
+export type TaxMode = 'taxable' | 'exempt'
+
+export const TAX_MODE_LABELS: Record<TaxMode, string> = {
+  taxable: '課税',
+  exempt: '非課税',
+}
+
+/**
+ * 請求者（請求元）プロファイル。
+ * 複数の請求者を登録し、請求書ごとに使い分ける。
+ */
+export interface IssuerProfile {
+  id: string
+  /** 請求者名（例：株式会社アスリートキャリアセンター） */
+  name: string
+  /** 課税区分（非課税枠は消費税を計算しない） */
+  taxMode: TaxMode
+  /** 適格請求書発行事業者登録番号（例：T1234567890123／非課税枠は空でも可） */
   registrationNumber: string
   address: string
   tel: string
   email: string
-  /** 振込先など備考 */
+  /** 振込先など */
   bankInfo: string
 }
 
@@ -58,8 +77,10 @@ export interface Invoice {
   dueDate: string // YYYY-MM-DD
   status: InvoiceStatus
   customerId: string
-  /** 発行時点の請求元スナップショット（後から設定変更されても過去分は不変） */
-  issuer: IssuerInfo
+  /** 使用した請求者プロファイルのID */
+  issuerId: string
+  /** 発行時点の請求者スナップショット（後から設定変更されても過去分は不変） */
+  issuer: IssuerProfile
   items: InvoiceItem[]
   notes: string
   createdAt: string
@@ -70,5 +91,6 @@ export interface Invoice {
 export interface AppData {
   customers: Customer[]
   invoices: Invoice[]
-  issuer: IssuerInfo
+  /** 使い分け可能な請求者プロファイル一覧 */
+  issuers: IssuerProfile[]
 }

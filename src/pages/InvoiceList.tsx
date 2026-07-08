@@ -17,7 +17,7 @@ export default function InvoiceList() {
   const [sortKey, setSortKey] = useState<SortKey>('issueDate')
   const [sortAsc, setSortAsc] = useState(false)
 
-  const totalOf = (inv: Invoice) => computeTotals(inv.items).total
+  const totalOf = (inv: Invoice) => computeTotals(inv.items, inv.issuer.taxMode).total
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -137,7 +137,10 @@ export default function InvoiceList() {
                   className="cursor-pointer transition hover:bg-slate-50"
                   onClick={() => navigate(`/invoices/${inv.id}`)}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-800">{inv.invoiceNumber}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-800">{inv.invoiceNumber}</div>
+                    <div className="text-xs text-slate-400">請求者: {inv.issuer.name}</div>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">
                     {getCustomer(inv.customerId)?.companyName ?? '—'}
                   </td>

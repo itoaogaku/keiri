@@ -1,64 +1,172 @@
 import { useState } from 'react'
 import { useApp } from '../store/AppContext'
-import type { IssuerInfo } from '../types'
+import { TAX_MODE_LABELS, type IssuerProfile, type TaxMode } from '../types'
+
+const EMPTY: Omit<IssuerProfile, 'id'> = {
+  name: '',
+  taxMode: 'taxable',
+  registrationNumber: '',
+  address: '',
+  tel: '',
+  email: '',
+  bankInfo: '',
+}
 
 export default function Settings() {
-  const { data, updateIssuer } = useApp()
-  const [form, setForm] = useState<IssuerInfo>({ ...data.issuer })
-  const [saved, setSaved] = useState(false)
+  const { data, addIssuer, updateIssuer, deleteIssuer } = useApp()
+  const [editing, setEditing] = useState<IssuerProfile | null>(null)
+  const [draft, setDraft] = useState<Omit<IssuerProfile, 'id'>>(EMPTY)
+  const [open, setOpen] = useState(false)
 
   const inputCls =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
 
-  const set = (key: keyof IssuerInfo, value: string) =>
-    setForm((f) => ({ ...f, [key]: value }))
-
-  const save = () => {
-    updateIssuer(form)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+  const openNew = () => {
+    setEditing(null)
+    setDraft(EMPTY)
+    setOpen(true)
   }
 
-  const fields: [keyof IssuerInfo, string, string?][] = [
-    ['companyName', '会社名 / 屋号'],
-    ['registrationNumber', '適格請求書発行事業者登録番号', 'T + 13桁（例：T1234567890123）'],
-    ['address', '住所'],
-    ['tel', '電話番号'],
-    ['email', 'メールアドレス'],
-    ['bankInfo', '振込先'],
-  ]
+  const openEdit = (i: IssuerProfile) => {
+    setEditing(i)
+    setDraft({ ...i })
+    setOpen(true)
+  }
+
+  const save = () => {
+    if (!draft.name.trim()) {
+      alert('請求者名は必須です')
+      return
+    }
+    if (editing) updateIssuer({ ...editing, ...draft })
+    else addIssuer(draft)
+    setOpen(false)
+  }
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-slate-800">設定（請求元情報）</h1>
-
-      <div className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="mb-4 text-sm text-slate-500">
-          ここで設定した情報が、新規請求書作成時の「請求元」初期値になります。
-        </p>
-        <div className="space-y-4">
-          {fields.map(([key, label, hint]) => (
-            <div key={key}>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
-              <input
-                className={inputCls}
-                value={form[key]}
-                onChange={(e) => set(key, e.target.value)}
-              />
-              {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 flex items-center justify-end gap-3">
-          {saved && <span className="text-sm text-emerald-600">✓ 保存しました</span>}
-          <button
-            onClick={save}
-            className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-          >
-            保存する
-          </button>
-        </div>
+      <div className="mb-2 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">請求者（請求元）の管理</h1>
+        <button
+          onClick={openNew}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
+        >
+          ＋ 請求者を追加
+        </button>
       </div>
+      <p className="mb-6 text-sm text-slate-500">
+        請求書作成時にここから請求者を選んで使い分けます。非課税枠の請求者では消費税を計算しません。
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {data.issuers.map((i) => (
+          <div key={i.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div className="font-semibold text-slate-800">{i.name}</div>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  i.taxMode === 'exempt'
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}
+              >
+                {TAX_MODE_LABELS[i.taxMode]}
+              </span>
+            </div>
+            <div className="mt-3 space-y-0.5 text-sm text-slate-500">
+              <div>登録番号：{i.registrationNumber || '—'}</div>
+              <div>{i.address || '住所未設定'}</div>
+              <div>{i.tel || 'TEL未設定'}</div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => openEdit(i)}
+                className="rounded-md bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+              >
+                編集
+              </button>
+              <button
+                onClick={() => {
+                  if (data.issuers.length <= 1) {
+                    alert('請求者は最低1件必要です')
+                    return
+                  }
+                  if (confirm(`「${i.name}」を削除しますか？`)) deleteIssuer(i.id)
+                }}
+                className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100"
+              >
+                削除
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* モーダル */}
+      {open && (
+        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4 py-8 overflow-y-auto">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-slate-800">
+              {editing ? '請求者を編集' : '請求者を追加'}
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">請求者名</label>
+                <input
+                  className={inputCls}
+                  value={draft.name}
+                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">課税区分</label>
+                <select
+                  className={inputCls}
+                  value={draft.taxMode}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, taxMode: e.target.value as TaxMode }))
+                  }
+                >
+                  <option value="taxable">課税（消費税を計算する）</option>
+                  <option value="exempt">非課税（消費税を計算しない）</option>
+                </select>
+              </div>
+              {(
+                [
+                  ['registrationNumber', '適格請求書発行事業者登録番号'],
+                  ['address', '住所'],
+                  ['tel', '電話番号'],
+                  ['email', 'メールアドレス'],
+                  ['bankInfo', '振込先'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
+                  <input
+                    className={inputCls}
+                    value={draft[key]}
+                    onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={save}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

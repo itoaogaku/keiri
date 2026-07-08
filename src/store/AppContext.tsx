@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AppData, Customer, Invoice, IssuerInfo } from '../types'
+import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
 
@@ -23,8 +23,11 @@ interface AppContextValue {
   addCustomer: (c: Omit<Customer, 'id'>) => Customer
   updateCustomer: (c: Customer) => void
   deleteCustomer: (id: string) => void
-  // 請求元
-  updateIssuer: (issuer: IssuerInfo) => void
+  // 請求者
+  getIssuer: (id: string) => IssuerProfile | undefined
+  addIssuer: (i: Omit<IssuerProfile, 'id'>) => IssuerProfile
+  updateIssuer: (i: IssuerProfile) => void
+  deleteIssuer: (id: string) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -86,8 +89,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData((d) => ({ ...d, customers: d.customers.filter((c) => c.id !== id) }))
   }, [])
 
-  const updateIssuer = useCallback((issuer: IssuerInfo) => {
-    setData((d) => ({ ...d, issuer }))
+  const getIssuer = useCallback(
+    (id: string) => data.issuers.find((i) => i.id === id),
+    [data.issuers]
+  )
+
+  const addIssuer = useCallback((i: Omit<IssuerProfile, 'id'>): IssuerProfile => {
+    const saved: IssuerProfile = { ...i, id: newId() }
+    setData((d) => ({ ...d, issuers: [...d.issuers, saved] }))
+    return saved
+  }, [])
+
+  const updateIssuer = useCallback((issuer: IssuerProfile) => {
+    setData((d) => ({
+      ...d,
+      issuers: d.issuers.map((x) => (x.id === issuer.id ? issuer : x)),
+    }))
+  }, [])
+
+  const deleteIssuer = useCallback((id: string) => {
+    setData((d) => ({ ...d, issuers: d.issuers.filter((i) => i.id !== id) }))
   }, [])
 
   const value = useMemo<AppContextValue>(
@@ -101,7 +122,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomer,
       updateCustomer,
       deleteCustomer,
+      getIssuer,
+      addIssuer,
       updateIssuer,
+      deleteIssuer,
     }),
     [
       data,
@@ -113,7 +137,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomer,
       updateCustomer,
       deleteCustomer,
+      getIssuer,
+      addIssuer,
       updateIssuer,
+      deleteIssuer,
     ]
   )
 
