@@ -11,12 +11,12 @@ import {
 import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
-import { checkNotion, fetchState, remote } from '../lib/api'
+import { checkSync, fetchState, remote } from '../lib/api'
 
 interface AppContextValue {
   data: AppData
-  /** Notion 連携が有効か（サーバー起動＋トークン設定時に true） */
-  notionEnabled: boolean
+  /** スプレッドシート連携が有効か（サーバー起動＋認証設定時に true） */
+  syncEnabled: boolean
   // 請求書
   getInvoice: (id: string) => Invoice | undefined
   addInvoice: (inv: Invoice) => Invoice
@@ -38,11 +38,11 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData())
-  const [notionEnabled, setNotionEnabled] = useState(false)
+  const [syncEnabled, setSyncEnabled] = useState(false)
 
   // コールバック内から最新値を参照するための ref
   const dataRef = useRef(data)
-  const notionRef = useRef(false)
+  const syncRef = useRef(false)
   useEffect(() => {
     dataRef.current = data
   }, [data])
@@ -52,15 +52,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveData(data)
   }, [data])
 
-  // 起動時：Notion が有効ならリモート状態を取り込む（顧客・請求書）。
+  // 起動時：スプレッドシート連携が有効ならリモート状態を取り込む（顧客・請求書）。
   // 請求者(issuers)はクライアント設定として保持する。
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const on = await checkNotion()
+      const on = await checkSync()
       if (cancelled) return
-      notionRef.current = on
-      setNotionEnabled(on)
+      syncRef.current = on
+      setSyncEnabled(on)
       if (!on) return
       try {
         const remoteState = await fetchState()
@@ -71,7 +71,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           invoices: remoteState.invoices,
         }))
       } catch (e) {
-        console.warn('[keiri] Notion からの読み込みに失敗しました。localStorage を使用します。', e)
+        console.warn(
+          '[keiri] スプレッドシートからの読み込みに失敗しました。localStorage を使用します。',
+          e
+        )
       }
     })()
     return () => {
@@ -79,10 +82,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Notion への best-effort 書き込み（失敗しても UI は継続）
+  // スプレッドシートへの best-effort 書き込み（失敗しても UI は継続）
   const push = (fn: () => Promise<unknown>) => {
-    if (!notionRef.current) return
-    fn().catch((e) => console.warn('[keiri] Notion 同期に失敗しました', e))
+    if (!syncRef.current) return
+    fn().catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
   }
 
   const customerName = (customerId: string) =>
@@ -168,7 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextValue>(
     () => ({
       data,
-      notionEnabled,
+      syncEnabled,
       getInvoice,
       addInvoice,
       updateInvoice,
@@ -184,7 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       data,
-      notionEnabled,
+      syncEnabled,
       getInvoice,
       addInvoice,
       updateInvoice,

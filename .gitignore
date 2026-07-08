@@ -4,7 +4,8 @@ dist-ssr
 *.local
 .env
 .env.local
-server/.notion-dbs.json
+service-account.json
+*.service-account.json
 .DS_Store
 .vite
 npm-debug.log*

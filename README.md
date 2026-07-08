@@ -5,8 +5,8 @@
 ## 技術スタック
 
 - フロント：React 18 + TypeScript + Vite + Tailwind CSS
-- 永続化：localStorage（即時キャッシュ）＋ **Notion**（任意・データベース保存）
-- バックエンド：軽量 Node/Express プロキシ（`server/`。Notion との橋渡し）
+- 永続化：localStorage（即時キャッシュ）＋ **Google スプレッドシート**（任意・データ蓄積）
+- バックエンド：軽量 Node/Express プロキシ（`server/`。Google Sheets との橋渡し）
 - PDF出力：ブラウザ印刷（A4最適化・`@media print`）
 
 ## セットアップ
@@ -14,12 +14,12 @@
 ```bash
 npm install
 npm run dev        # フロントのみ（http://localhost:5173／localStorage で動作）
-npm run dev:all    # フロント＋バックエンド同時起動（Notion 連携を使う場合）
+npm run dev:all    # フロント＋バックエンド同時起動（スプレッドシート連携を使う場合）
 npm run build      # 本番ビルド
 npm run lint       # 型チェック（tsc --noEmit）
 ```
 
-Notion にデータを保存する設定は **[NOTION_SETUP.md](./NOTION_SETUP.md)** を参照。
+スプレッドシートにデータを蓄積する設定は **[SHEETS_SETUP.md](./SHEETS_SETUP.md)** を参照。
 未設定でもアプリはそのまま localStorage で動作します。
 
 ## 請求者（請求元）の使い分け
