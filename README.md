@@ -4,23 +4,24 @@
 
 ## 技術スタック
 
-- フロント：React 18 + TypeScript + Vite + Tailwind CSS
+- フロント：React 18 + TypeScript + Vite + Tailwind CSS（サーバー不要の SPA）
 - 永続化：localStorage（即時キャッシュ）＋ **Google スプレッドシート**（任意・データ蓄積）
-- バックエンド：軽量 Node/Express プロキシ（`server/`。Google Sheets との橋渡し）
+- スプレッドシート連携：**Google Apps Script**（`apps-script/Code.gs`。鍵・サーバー不要）
+- 公開：Vercel などの静的ホスティングにそのままデプロイ可
 - PDF出力：ブラウザ印刷（A4最適化・`@media print`）
 
 ## セットアップ
 
 ```bash
 npm install
-npm run dev        # フロントのみ（http://localhost:5173／localStorage で動作）
-npm run dev:all    # フロント＋バックエンド同時起動（スプレッドシート連携を使う場合）
+npm run dev        # 開発サーバ（http://localhost:5173）
 npm run build      # 本番ビルド
 npm run lint       # 型チェック（tsc --noEmit）
 ```
 
-スプレッドシートにデータを蓄積する設定は **[SHEETS_SETUP.md](./SHEETS_SETUP.md)** を参照。
-未設定でもアプリはそのまま localStorage で動作します。
+スプレッドシートにデータを蓄積する設定（Apps Script + Vercel）は
+**[GAS_SETUP.md](./GAS_SETUP.md)** を参照。未設定でもアプリはそのまま
+localStorage で動作します。
 
 ## 請求者（請求元）の使い分け
 

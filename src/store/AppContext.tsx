@@ -11,12 +11,16 @@ import {
 import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
-import { checkSync, fetchState, remote } from '../lib/api'
+import { getGasUrl, setGasUrl as persistGasUrl, fetchState, remote } from '../lib/gas'
 
 interface AppContextValue {
   data: AppData
-  /** スプレッドシート連携が有効か（サーバー起動＋認証設定時に true） */
+  /** スプレッドシート連携が有効か（GAS URL 設定＋接続成功時に true） */
   syncEnabled: boolean
+  /** 設定中の GAS ウェブアプリ URL */
+  gasUrl: string
+  /** GAS URL を設定・保存して再接続する */
+  setGasUrl: (url: string) => void
   // 請求書
   getInvoice: (id: string) => Invoice | undefined
   addInvoice: (inv: Invoice) => Invoice
@@ -39,38 +43,44 @@ const AppContext = createContext<AppContextValue | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData())
   const [syncEnabled, setSyncEnabled] = useState(false)
+  const [gasUrl, setGasUrlState] = useState<string>(() => getGasUrl())
 
   // コールバック内から最新値を参照するための ref
   const dataRef = useRef(data)
-  const syncRef = useRef(false)
+  const gasRef = useRef(gasUrl)
   useEffect(() => {
     dataRef.current = data
   }, [data])
+  useEffect(() => {
+    gasRef.current = gasUrl
+  }, [gasUrl])
 
   // localStorage への即時キャッシュ（常に）
   useEffect(() => {
     saveData(data)
   }, [data])
 
-  // 起動時：スプレッドシート連携が有効ならリモート状態を取り込む（顧客・請求書）。
+  // GAS URL が設定されていればリモート状態を取り込む（顧客・請求書）。
   // 請求者(issuers)はクライアント設定として保持する。
   useEffect(() => {
     let cancelled = false
+    if (!gasUrl) {
+      setSyncEnabled(false)
+      return
+    }
     ;(async () => {
-      const on = await checkSync()
-      if (cancelled) return
-      syncRef.current = on
-      setSyncEnabled(on)
-      if (!on) return
       try {
-        const remoteState = await fetchState()
+        const remoteState = await fetchState(gasUrl)
         if (cancelled) return
         setData((d) => ({
           ...d,
           customers: remoteState.customers,
           invoices: remoteState.invoices,
         }))
+        setSyncEnabled(true)
       } catch (e) {
+        if (cancelled) return
+        setSyncEnabled(false)
         console.warn(
           '[keiri] スプレッドシートからの読み込みに失敗しました。localStorage を使用します。',
           e
@@ -80,12 +90,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
+  }, [gasUrl])
+
+  const setGasUrl = useCallback((url: string) => {
+    persistGasUrl(url)
+    setGasUrlState(url.trim())
   }, [])
 
   // スプレッドシートへの best-effort 書き込み（失敗しても UI は継続）
-  const push = (fn: () => Promise<unknown>) => {
-    if (!syncRef.current) return
-    fn().catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
+  const push = (fn: (url: string) => Promise<unknown>) => {
+    const url = gasRef.current
+    if (!url) return
+    fn(url).catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
   }
 
   const customerName = (customerId: string) =>
@@ -103,7 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: new Date().toISOString(),
     }
     setData((d) => ({ ...d, invoices: [saved, ...d.invoices] }))
-    push(() => remote.saveInvoice(saved, customerName(saved.customerId)))
+    push((url) => remote.saveInvoice(url, saved, customerName(saved.customerId)))
     return saved
   }, [])
 
@@ -113,12 +129,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       invoices: d.invoices.map((i) => (i.id === saved.id ? saved : i)),
     }))
-    push(() => remote.saveInvoice(saved, customerName(saved.customerId)))
+    push((url) => remote.saveInvoice(url, saved, customerName(saved.customerId)))
   }, [])
 
   const deleteInvoice = useCallback((id: string) => {
     setData((d) => ({ ...d, invoices: d.invoices.filter((i) => i.id !== id) }))
-    push(() => remote.deleteInvoice(id))
+    push((url) => remote.deleteInvoice(url, id))
   }, [])
 
   const getCustomer = useCallback(
@@ -129,7 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCustomer = useCallback((c: Omit<Customer, 'id'>): Customer => {
     const saved: Customer = { ...c, id: newId() }
     setData((d) => ({ ...d, customers: [...d.customers, saved] }))
-    push(() => remote.saveCustomer(saved))
+    push((url) => remote.saveCustomer(url, saved))
     return saved
   }, [])
 
@@ -138,12 +154,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       customers: d.customers.map((x) => (x.id === c.id ? c : x)),
     }))
-    push(() => remote.saveCustomer(c))
+    push((url) => remote.saveCustomer(url, c))
   }, [])
 
   const deleteCustomer = useCallback((id: string) => {
     setData((d) => ({ ...d, customers: d.customers.filter((c) => c.id !== id) }))
-    push(() => remote.deleteCustomer(id))
+    push((url) => remote.deleteCustomer(url, id))
   }, [])
 
   const getIssuer = useCallback(
@@ -172,6 +188,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       data,
       syncEnabled,
+      gasUrl,
+      setGasUrl,
       getInvoice,
       addInvoice,
       updateInvoice,
@@ -188,6 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       data,
       syncEnabled,
+      gasUrl,
+      setGasUrl,
       getInvoice,
       addInvoice,
       updateInvoice,

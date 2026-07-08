@@ -4,9 +4,9 @@ dist-ssr
 *.local
 .env
 .env.local
-service-account.json
-*.service-account.json
 .DS_Store
+*.tsbuildinfo
+.vercel
 .vite
 npm-debug.log*
 yarn-debug.log*
