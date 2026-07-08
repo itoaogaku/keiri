@@ -4,15 +4,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
+import { checkNotion, fetchState, remote } from '../lib/api'
 
 interface AppContextValue {
   data: AppData
+  /** Notion 連携が有効か（サーバー起動＋トークン設定時に true） */
+  notionEnabled: boolean
   // 請求書
   getInvoice: (id: string) => Invoice | undefined
   addInvoice: (inv: Invoice) => Invoice
@@ -34,10 +38,55 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData())
+  const [notionEnabled, setNotionEnabled] = useState(false)
 
+  // コールバック内から最新値を参照するための ref
+  const dataRef = useRef(data)
+  const notionRef = useRef(false)
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
+
+  // localStorage への即時キャッシュ（常に）
   useEffect(() => {
     saveData(data)
   }, [data])
+
+  // 起動時：Notion が有効ならリモート状態を取り込む（顧客・請求書）。
+  // 請求者(issuers)はクライアント設定として保持する。
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const on = await checkNotion()
+      if (cancelled) return
+      notionRef.current = on
+      setNotionEnabled(on)
+      if (!on) return
+      try {
+        const remoteState = await fetchState()
+        if (cancelled) return
+        setData((d) => ({
+          ...d,
+          customers: remoteState.customers,
+          invoices: remoteState.invoices,
+        }))
+      } catch (e) {
+        console.warn('[keiri] Notion からの読み込みに失敗しました。localStorage を使用します。', e)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Notion への best-effort 書き込み（失敗しても UI は継続）
+  const push = (fn: () => Promise<unknown>) => {
+    if (!notionRef.current) return
+    fn().catch((e) => console.warn('[keiri] Notion 同期に失敗しました', e))
+  }
+
+  const customerName = (customerId: string) =>
+    dataRef.current.customers.find((c) => c.id === customerId)?.companyName ?? ''
 
   const getInvoice = useCallback(
     (id: string) => data.invoices.find((i) => i.id === id),
@@ -51,20 +100,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: new Date().toISOString(),
     }
     setData((d) => ({ ...d, invoices: [saved, ...d.invoices] }))
+    push(() => remote.saveInvoice(saved, customerName(saved.customerId)))
     return saved
   }, [])
 
   const updateInvoice = useCallback((inv: Invoice) => {
+    const saved: Invoice = { ...inv, updatedAt: new Date().toISOString() }
     setData((d) => ({
       ...d,
-      invoices: d.invoices.map((i) =>
-        i.id === inv.id ? { ...inv, updatedAt: new Date().toISOString() } : i
-      ),
+      invoices: d.invoices.map((i) => (i.id === saved.id ? saved : i)),
     }))
+    push(() => remote.saveInvoice(saved, customerName(saved.customerId)))
   }, [])
 
   const deleteInvoice = useCallback((id: string) => {
     setData((d) => ({ ...d, invoices: d.invoices.filter((i) => i.id !== id) }))
+    push(() => remote.deleteInvoice(id))
   }, [])
 
   const getCustomer = useCallback(
@@ -75,6 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCustomer = useCallback((c: Omit<Customer, 'id'>): Customer => {
     const saved: Customer = { ...c, id: newId() }
     setData((d) => ({ ...d, customers: [...d.customers, saved] }))
+    push(() => remote.saveCustomer(saved))
     return saved
   }, [])
 
@@ -83,10 +135,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       customers: d.customers.map((x) => (x.id === c.id ? c : x)),
     }))
+    push(() => remote.saveCustomer(c))
   }, [])
 
   const deleteCustomer = useCallback((id: string) => {
     setData((d) => ({ ...d, customers: d.customers.filter((c) => c.id !== id) }))
+    push(() => remote.deleteCustomer(id))
   }, [])
 
   const getIssuer = useCallback(
@@ -114,6 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextValue>(
     () => ({
       data,
+      notionEnabled,
       getInvoice,
       addInvoice,
       updateInvoice,
@@ -129,6 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       data,
+      notionEnabled,
       getInvoice,
       addInvoice,
       updateInvoice,

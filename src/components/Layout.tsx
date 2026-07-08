@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useApp } from '../store/AppContext'
 
 const NAV = [
   { to: '/', label: 'ダッシュボード', icon: '📊', end: true },
@@ -8,10 +9,11 @@ const NAV = [
 ]
 
 export default function Layout() {
+  const { notionEnabled } = useApp()
   return (
     <div className="min-h-screen">
       {/* サイドバー */}
-      <aside className="no-print fixed inset-y-0 left-0 w-60 border-r border-slate-200 bg-white px-4 py-6">
+      <aside className="no-print fixed inset-y-0 left-0 flex w-60 flex-col border-r border-slate-200 bg-white px-4 py-6">
         <div className="mb-8 flex items-center gap-2 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-lg font-bold text-white">
             K
@@ -40,6 +42,20 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* データ保存先ステータス */}
+        <div className="mt-auto px-2 pt-6">
+          <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                notionEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+            />
+            <span className="text-slate-500">
+              {notionEnabled ? 'Notion 同期中' : 'ローカル保存'}
+            </span>
+          </div>
+        </div>
       </aside>
 
       {/* メイン */}

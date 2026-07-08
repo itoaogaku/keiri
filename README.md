@@ -4,20 +4,37 @@
 
 ## 技術スタック
 
-- React 18 + TypeScript
-- Vite
-- Tailwind CSS
-- 状態管理・永続化：localStorage（`keiri.appdata.v1`）
+- フロント：React 18 + TypeScript + Vite + Tailwind CSS
+- 永続化：localStorage（即時キャッシュ）＋ **Notion**（任意・データベース保存）
+- バックエンド：軽量 Node/Express プロキシ（`server/`。Notion との橋渡し）
 - PDF出力：ブラウザ印刷（A4最適化・`@media print`）
 
 ## セットアップ
 
 ```bash
 npm install
-npm run dev      # 開発サーバ起動（http://localhost:5173）
-npm run build    # 本番ビルド
-npm run lint     # 型チェック（tsc --noEmit）
+npm run dev        # フロントのみ（http://localhost:5173／localStorage で動作）
+npm run dev:all    # フロント＋バックエンド同時起動（Notion 連携を使う場合）
+npm run build      # 本番ビルド
+npm run lint       # 型チェック（tsc --noEmit）
 ```
+
+Notion にデータを保存する設定は **[NOTION_SETUP.md](./NOTION_SETUP.md)** を参照。
+未設定でもアプリはそのまま localStorage で動作します。
+
+## 請求者（請求元）の使い分け
+
+5つの請求者プロファイルを標準搭載し、請求書ごとに選択できます（`/settings` で編集）。
+
+| 請求者 | 課税区分 |
+| --- | --- |
+| 株式会社アスリートキャリアセンター | 課税 |
+| 一般社団法人アスリートキャリアセンター（非課税枠） | **非課税**（消費税なし） |
+| 一般社団法人アスリートキャリアセンター（課税枠） | 課税 |
+| 株式会社原D&S | 課税 |
+| 青山学院大学陸上競技部 | 課税 |
+
+非課税枠の請求者を選ぶと消費税を計算せず、合計＝税抜金額になります。
 
 ## 主要機能
 
