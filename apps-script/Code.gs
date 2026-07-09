@@ -20,7 +20,7 @@ const CUSTOMER_HEADERS = ['id', '企業名', '担当者', 'メール', '住所',
 const INVOICE_HEADERS = [
   'id', '請求書番号', '発行日', '支払期限', 'ステータス', '請求者', '課税区分',
   '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
-  '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称',
+  '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称', '事業種別',
 ]
 
 const STATUS_LABELS = {
@@ -143,6 +143,7 @@ function upsertInvoice(inv, customerName) {
     JSON.stringify(inv.items), JSON.stringify(inv.issuer || {}),
     inv.notes || '', inv.createdAt || '', inv.updatedAt || '',
     inv.honorific || '御中',
+    inv.businessType || '',
   ]
   upsert(sh, inv.id, row)
 }
@@ -165,6 +166,7 @@ function getState() {
       items: safeParse(r[13], []),
       notes: r[15], createdAt: r[16], updatedAt: r[17],
       honorific: r[18] || '御中',
+      businessType: r[19] || '',
     }
   })
   invoices.sort(function (a, b) {

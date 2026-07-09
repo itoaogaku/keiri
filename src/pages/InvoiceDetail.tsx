@@ -29,7 +29,7 @@ function bankLines(issuer: IssuerProfile): string[] {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getInvoice, getCustomer, getIssuer, updateInvoice } = useApp()
+  const { data, getInvoice, getCustomer, getIssuer, updateInvoice } = useApp()
 
   const inv = id ? getInvoice(id) : undefined
   if (!inv) {
@@ -73,6 +73,24 @@ export default function InvoiceDetail() {
                   {label}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-500">
+            事業種別
+            <select
+              value={inv.businessType ?? ''}
+              onChange={(e) => updateInvoice({ ...inv, businessType: e.target.value })}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">— 未分類 —</option>
+              {data.businessTypes.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+              {inv.businessType && !data.businessTypes.includes(inv.businessType) && (
+                <option value={inv.businessType}>{inv.businessType}</option>
+              )}
             </select>
           </label>
         </div>

@@ -64,6 +64,66 @@ const EMPTY: Omit<IssuerProfile, 'id'> = {
   accountHolder: '',
 }
 
+function BusinessTypesSection() {
+  const { data, addBusinessType, removeBusinessType } = useApp()
+  const [value, setValue] = useState('')
+
+  const inputCls =
+    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
+
+  const add = () => {
+    addBusinessType(value)
+    setValue('')
+  }
+
+  return (
+    <div className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-1 font-semibold text-slate-800">事業種別</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        請求書作成時に選べる分類です。スプレッドシートの「事業種別」列に記録され、
+        事業ごとの売上集計に使えます。
+      </p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {data.businessTypes.length === 0 && (
+          <span className="text-sm text-slate-400">まだ登録がありません</span>
+        )}
+        {data.businessTypes.map((b) => (
+          <span
+            key={b}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+          >
+            {b}
+            <button
+              onClick={() => removeBusinessType(b)}
+              className="text-slate-400 transition hover:text-red-500"
+              title="削除"
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className={inputCls}
+          placeholder="新しい事業種別を入力"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') add()
+          }}
+        />
+        <button
+          onClick={add}
+          className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+        >
+          追加
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
   const { data, addIssuer, updateIssuer, deleteIssuer } = useApp()
   const [editing, setEditing] = useState<IssuerProfile | null>(null)
@@ -115,6 +175,8 @@ export default function Settings() {
       <h1 className="mb-4 text-2xl font-bold text-slate-800">設定</h1>
 
       <SheetConnection />
+
+      <BusinessTypesSection />
 
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-800">請求者（請求元）の管理</h2>

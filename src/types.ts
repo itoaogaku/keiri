@@ -98,6 +98,8 @@ export interface Invoice {
   dueDate: string // YYYY-MM-DD
   status: InvoiceStatus
   customerId: string
+  /** 事業種別（売上分析用の分類。選択肢は編集可能） */
+  businessType: string
   /** 宛名の敬称（御中／様。既定は御中） */
   honorific: Honorific
   /** 使用した請求者プロファイルのID */
@@ -116,4 +118,6 @@ export interface AppData {
   invoices: Invoice[]
   /** 使い分け可能な請求者プロファイル一覧 */
   issuers: IssuerProfile[]
+  /** 事業種別の選択肢（ユーザーが追加・削除できる） */
+  businessTypes: string[]
 }

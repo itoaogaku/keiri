@@ -36,6 +36,9 @@ interface AppContextValue {
   addIssuer: (i: Omit<IssuerProfile, 'id'>) => IssuerProfile
   updateIssuer: (i: IssuerProfile) => void
   deleteIssuer: (id: string) => void
+  // 事業種別
+  addBusinessType: (name: string) => void
+  removeBusinessType: (name: string) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -184,6 +187,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData((d) => ({ ...d, issuers: d.issuers.filter((i) => i.id !== id) }))
   }, [])
 
+  const addBusinessType = useCallback((name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setData((d) =>
+      d.businessTypes.includes(trimmed)
+        ? d
+        : { ...d, businessTypes: [...d.businessTypes, trimmed] }
+    )
+  }, [])
+
+  const removeBusinessType = useCallback((name: string) => {
+    setData((d) => ({
+      ...d,
+      businessTypes: d.businessTypes.filter((b) => b !== name),
+    }))
+  }, [])
+
   const value = useMemo<AppContextValue>(
     () => ({
       data,
@@ -202,6 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addIssuer,
       updateIssuer,
       deleteIssuer,
+      addBusinessType,
+      removeBusinessType,
     }),
     [
       data,
@@ -220,6 +242,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addIssuer,
       updateIssuer,
       deleteIssuer,
+      addBusinessType,
+      removeBusinessType,
     ]
   )
 

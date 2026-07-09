@@ -24,6 +24,14 @@ function makeIssuer(
   }
 }
 
+/** 事業種別の初期候補（設定画面・請求書作成画面で追加・削除できる） */
+export const DEFAULT_BUSINESS_TYPES: string[] = [
+  '人材紹介',
+  'コンサルティング',
+  'イベント運営',
+  'その他',
+]
+
 /** 使い分け可能な5つの請求者プロファイル（初期値） */
 export const DEFAULT_ISSUERS: IssuerProfile[] = [
   makeIssuer('issuer-acc-kk', '株式会社アスリートキャリアセンター', 'taxable'),
@@ -69,6 +77,7 @@ function seedData(): AppData {
       dueDate: dueEnd,
       status: 'issued',
       customerId: customers[0].id,
+      businessType: 'コンサルティング',
       honorific: '御中',
       issuerId: taxableIssuer.id,
       issuer: { ...taxableIssuer },
@@ -87,6 +96,7 @@ function seedData(): AppData {
       dueDate: dueEnd,
       status: 'paid',
       customerId: customers[1].id,
+      businessType: 'その他',
       honorific: '御中',
       issuerId: exemptIssuer.id,
       issuer: { ...exemptIssuer },
@@ -99,7 +109,12 @@ function seedData(): AppData {
     },
   ]
 
-  return { customers, invoices, issuers: DEFAULT_ISSUERS }
+  return {
+    customers,
+    invoices,
+    issuers: DEFAULT_ISSUERS,
+    businessTypes: DEFAULT_BUSINESS_TYPES,
+  }
 }
 
 /** 旧データの請求者に、後から追加した振込先フィールドを補完する */
@@ -124,6 +139,10 @@ export function loadData(): AppData {
         parsed.issuers = DEFAULT_ISSUERS
       } else {
         parsed.issuers = parsed.issuers.map(normalizeIssuer)
+      }
+      // 事業種別リストが無い旧データを補完
+      if (!parsed.businessTypes) {
+        parsed.businessTypes = DEFAULT_BUSINESS_TYPES
       }
       return parsed
     }

@@ -24,7 +24,7 @@ export default function InvoiceForm() {
   const [searchParams] = useSearchParams()
   const copyFromId = searchParams.get('copyFrom')
   const navigate = useNavigate()
-  const { data, getInvoice, addInvoice, updateInvoice } = useApp()
+  const { data, getInvoice, addInvoice, updateInvoice, addBusinessType } = useApp()
 
   const isEdit = Boolean(id)
 
@@ -63,6 +63,14 @@ export default function InvoiceForm() {
   const set = <K extends keyof Invoice>(key: K, value: Invoice[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
+  // 事業種別をその場で追加して選択する
+  const addAndSelectBusinessType = () => {
+    const name = window.prompt('追加する事業種別を入力してください')?.trim()
+    if (!name) return
+    addBusinessType(name)
+    set('businessType', name)
+  }
+
   // 請求者を切り替える。issuerId と snapshot(issuer) を同時に更新する
   const selectIssuer = (issuerId: string) =>
     setForm((f) => {
@@ -96,6 +104,7 @@ export default function InvoiceForm() {
       ...form,
       status: status ?? form.status,
       honorific: form.honorific ?? '御中',
+      businessType: form.businessType ?? '',
     }
     if (isEdit) {
       updateInvoice(payload)
@@ -223,6 +232,35 @@ export default function InvoiceForm() {
                 <option value="御中">御中</option>
                 <option value="様">様</option>
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-slate-500">
+                事業種別（売上分析用）
+              </label>
+              <div className="flex gap-2">
+                <select
+                  className={inputCls}
+                  value={form.businessType ?? ''}
+                  onChange={(e) => set('businessType', e.target.value)}
+                >
+                  <option value="">— 未分類 —</option>
+                  {data.businessTypes.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                  {form.businessType && !data.businessTypes.includes(form.businessType) && (
+                    <option value={form.businessType}>{form.businessType}</option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={addAndSelectBusinessType}
+                  className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  ＋追加
+                </button>
+              </div>
             </div>
           </div>
         </section>
