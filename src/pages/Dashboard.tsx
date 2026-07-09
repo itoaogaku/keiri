@@ -7,20 +7,26 @@ import StatusBadge from '../components/StatusBadge'
 
 export default function Dashboard() {
   const { data, getCustomer } = useApp()
-  const [bizPeriod, setBizPeriod] = useState<'month' | 'all'>('month')
+  const [bizPeriod, setBizPeriod] = useState<'month' | 'fy' | 'all'>('fy')
   const now = new Date()
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  const monthInvoices = data.invoices.filter((i) =>
-    i.issueDate.startsWith(thisMonth)
-  )
+  // 年度（4月始まり）の範囲を算出。1〜3月は前年が年度開始年。
+  const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+  const fyStart = `${fyStartYear}-04-01`
+  const fyEnd = `${fyStartYear + 1}-04-01` // 翌年度4/1（未満で判定）
+  const inFy = (iso: string) => iso >= fyStart && iso < fyEnd
+
+  const monthInvoices = data.invoices.filter((i) => i.issueDate.startsWith(thisMonth))
+  const fyInvoices = data.invoices.filter((i) => inFy(i.issueDate))
 
   const totalOf = (inv: (typeof data.invoices)[number]) =>
     computeTotals(inv.items, inv.issuer.taxMode).total
 
-  // 事業種別ごとの売上集計（今月／全期間で切替）
+  // 事業種別ごとの売上集計（今月／今年度／全期間で切替）
   const bizBreakdown = useMemo(() => {
-    const source = bizPeriod === 'month' ? monthInvoices : data.invoices
+    const source =
+      bizPeriod === 'month' ? monthInvoices : bizPeriod === 'fy' ? fyInvoices : data.invoices
     const map = new Map<string, number>()
     for (const inv of source) {
       const key = inv.businessType || '未分類'
@@ -34,11 +40,12 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bizPeriod, data.invoices])
 
-  const salesTotal = monthInvoices.reduce((s, i) => s + totalOf(i), 0)
-  const paidTotal = data.invoices
+  // サマリーは今年度（4月〜翌3月）を対象にする
+  const salesTotal = fyInvoices.reduce((s, i) => s + totalOf(i), 0)
+  const paidTotal = fyInvoices
     .filter((i) => i.status === 'paid')
     .reduce((s, i) => s + totalOf(i), 0)
-  const unpaidTotal = data.invoices
+  const unpaidTotal = fyInvoices
     .filter((i) => ['issued', 'awaiting_payment', 'overdue'].includes(i.status))
     .reduce((s, i) => s + totalOf(i), 0)
 
@@ -47,9 +54,9 @@ export default function Dashboard() {
     .slice(0, 5)
 
   const cards = [
-    { label: '今月の売上合計', value: yen(salesTotal), color: 'text-brand-600', sub: `${monthInvoices.length}件` },
-    { label: '未入金金額', value: yen(unpaidTotal), color: 'text-amber-600', sub: '入金待ち・延滞含む' },
-    { label: '入金済み金額', value: yen(paidTotal), color: 'text-emerald-600', sub: '累計' },
+    { label: '今年度の売上合計', value: yen(salesTotal), color: 'text-brand-600', sub: `${fyStartYear}年度 ・ ${fyInvoices.length}件` },
+    { label: '今年度の未入金金額', value: yen(unpaidTotal), color: 'text-amber-600', sub: '入金待ち・延滞含む' },
+    { label: '今年度の入金済み金額', value: yen(paidTotal), color: 'text-emerald-600', sub: `${fyStartYear}年度` },
   ]
 
   return (
@@ -82,6 +89,7 @@ export default function Dashboard() {
             {(
               [
                 ['month', '今月'],
+                ['fy', '今年度'],
                 ['all', '全期間'],
               ] as const
             ).map(([key, label]) => (
