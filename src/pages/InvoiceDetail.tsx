@@ -24,7 +24,7 @@ function bankLines(issuer: IssuerProfile): string[] {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getInvoice, getCustomer } = useApp()
+  const { getInvoice, getCustomer, getIssuer } = useApp()
 
   const inv = id ? getInvoice(id) : undefined
   if (!inv) {
@@ -43,6 +43,8 @@ export default function InvoiceDetail() {
   const customer = getCustomer(inv.customerId)
   const t = computeTotals(inv.items, inv.issuer.taxMode)
   const exempt = inv.issuer.taxMode === 'exempt'
+  // 角印は請求者プロファイル（最新）から参照する（請求書には保存していない）
+  const seal = getIssuer(inv.issuerId)?.sealImage ?? inv.issuer.sealImage
 
   return (
     <div>
@@ -104,7 +106,7 @@ export default function InvoiceDetail() {
               </div>
             )}
             <div className="mt-6 text-sm text-slate-600">下記の通りご請求申し上げます。</div>
-            <div className="mt-2 inline-block rounded-lg bg-slate-100 px-4 py-2">
+            <div className="mt-2 inline-block rounded-lg border-2 border-slate-800 px-4 py-2">
               <span className="text-sm text-slate-500">ご請求金額</span>
               <span className="ml-3 text-2xl font-bold text-slate-800">{yen(t.total)}</span>
               <span className="ml-1 text-sm text-slate-500">（税込）</span>
@@ -113,9 +115,17 @@ export default function InvoiceDetail() {
               支払期限：<span className="font-medium text-slate-800">{jpDate(inv.dueDate)}</span>
             </div>
           </div>
-          <div className="text-sm text-slate-600">
+          <div className="relative text-sm text-slate-600">
+            {/* 角印（背景透過画像を社名・住所付近に重ねて表示） */}
+            {seal && (
+              <img
+                src={seal}
+                alt="角印"
+                className="pointer-events-none absolute right-0 top-2 h-20 w-20 object-contain"
+              />
+            )}
             <div className="font-semibold text-slate-800">{inv.issuer.name}</div>
-            {inv.issuer.address && <div>{inv.issuer.address}</div>}
+            {inv.issuer.address && <div className="pr-16">{inv.issuer.address}</div>}
             {inv.issuer.tel && <div>TEL: {inv.issuer.tel}</div>}
             {inv.issuer.email && <div>{inv.issuer.email}</div>}
             {inv.issuer.registrationNumber && (

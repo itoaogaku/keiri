@@ -29,6 +29,17 @@ function blankItem(): InvoiceItem {
   return { id: newId(), name: '', quantity: 1, unitPrice: 0, taxRate: 10 }
 }
 
+/**
+ * 請求書に埋め込む請求者スナップショット。
+ * 角印画像(sealImage)は容量が大きく、請求書ごとに複製すると
+ * localStorage / スプレッドシートが肥大化するため除外する。
+ * 表示時は請求者プロファイル(issuerId)から都度参照する。
+ */
+export function snapshotIssuer(profile: IssuerProfile): IssuerProfile {
+  const { sealImage: _seal, ...rest } = profile
+  return rest
+}
+
 /** 空の新規請求書ドラフト（保存前・idは仮）。既定の請求者を割り当てる */
 export function createBlankInvoice(
   invoices: Invoice[],
@@ -44,7 +55,7 @@ export function createBlankInvoice(
     status: 'draft',
     customerId: '',
     issuerId: issuer.id,
-    issuer: { ...issuer },
+    issuer: snapshotIssuer(issuer),
     items: [blankItem()],
     notes: '',
     createdAt: nowIso,
@@ -76,7 +87,7 @@ export function copyInvoice(
     status: 'draft', // 下書きに戻す
     customerId: src.customerId, // 顧客を引き継ぐ
     issuerId: src.issuerId, // 請求者を引き継ぐ
-    issuer: { ...src.issuer }, // 請求者スナップショットを引き継ぐ
+    issuer: snapshotIssuer(src.issuer), // 請求者スナップショットを引き継ぐ（角印除く）
     items: src.items.map((it) => ({ ...it, id: newId() })), // 明細をディープコピー
     notes: src.notes, // 備考を引き継ぐ
     createdAt: nowIso,

@@ -95,6 +95,21 @@ export default function Settings() {
     setOpen(false)
   }
 
+  const handleSealFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 1_000_000) {
+      alert('画像が大きすぎます（1MB以下のPNGを推奨）。')
+      e.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () =>
+      setDraft((d) => ({ ...d, sealImage: String(reader.result) }))
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold text-slate-800">設定</h1>
@@ -233,6 +248,40 @@ export default function Settings() {
                     value={draft.accountHolder}
                     onChange={(e) => setDraft((d) => ({ ...d, accountHolder: e.target.value }))}
                   />
+                </div>
+              </div>
+
+              {/* 角印 */}
+              <div className="border-t border-slate-100 pt-3">
+                <div className="mb-2 text-xs font-semibold text-slate-600">角印（印鑑画像）</div>
+                <p className="mb-2 text-xs text-slate-400">
+                  背景が透過されたPNG画像を推奨します。請求書の社名・住所付近に押印表示されます。
+                </p>
+                <div className="flex items-center gap-3">
+                  {draft.sealImage && (
+                    <img
+                      src={draft.sealImage}
+                      alt="角印プレビュー"
+                      className="h-16 w-16 rounded border border-slate-200 object-contain p-1"
+                    />
+                  )}
+                  <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                    画像を選択
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleSealFile}
+                    />
+                  </label>
+                  {draft.sealImage && (
+                    <button
+                      onClick={() => setDraft((d) => ({ ...d, sealImage: undefined }))}
+                      className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100"
+                    >
+                      削除
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

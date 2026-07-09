@@ -83,6 +83,8 @@ export interface IssuerProfile {
   accountHolder: string // 口座名義
   /** 旧データ互換（1行テキストの振込先） */
   bankInfo?: string
+  /** 角印画像（背景透過PNG推奨・data URL）。請求書に押印表示される */
+  sealImage?: string
 }
 
 /** 請求書 */

@@ -27,6 +27,7 @@ body {
     margin: 0;
     padding: 0;
     box-shadow: none !important;
+    border: none !important;
   }
   @page {
     size: A4;

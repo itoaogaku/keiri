@@ -5,6 +5,7 @@ import {
   copyInvoice,
   createBlankInvoice,
   newId,
+  snapshotIssuer,
 } from '../lib/invoice'
 import { computeTotals, lineNet } from '../lib/calc'
 import { yen } from '../lib/format'
@@ -65,7 +66,7 @@ export default function InvoiceForm() {
   const selectIssuer = (issuerId: string) =>
     setForm((f) => {
       const profile = data.issuers.find((i) => i.id === issuerId)
-      return profile ? { ...f, issuerId, issuer: { ...profile } } : f
+      return profile ? { ...f, issuerId, issuer: snapshotIssuer(profile) } : f
     })
 
   const updateItem = (itemId: string, patch: Partial<InvoiceItem>) =>
