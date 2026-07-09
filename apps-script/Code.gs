@@ -30,7 +30,7 @@ const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
 // 請求者ごとの売上シート
 const ISSUER_SHEET_PREFIX = '売上_'
-const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '合計']
+const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '合計', '備考']
 
 // 「作成者」列の位置（0始まり）
 const CUSTOMER_CREATOR_IDX = 6
@@ -304,6 +304,7 @@ function rebuildIssuerSheets() {
       status: r[4] || '',         // ステータス
       issueDate: r[2] || '',      // 発行日
       total: Number(r[11]) || 0,  // 合計
+      notes: r[15] || '',         // 備考
     })
   })
 
@@ -331,10 +332,10 @@ function rebuildIssuerSheets() {
     const out = [ISSUER_VIEW_HEADERS]
     let sum = 0
     list.forEach(function (x) {
-      out.push([x.biz, x.number, x.customer, x.status, x.issueDate, x.total])
+      out.push([x.biz, x.number, x.customer, x.status, x.issueDate, x.total, x.notes])
       sum += x.total
     })
-    out.push(['', '', '', '', '合計', sum])
+    out.push(['', '', '', '', '合計', sum, ''])
 
     sh.getRange(1, 1, out.length, ISSUER_VIEW_HEADERS.length).setValues(out)
   })
