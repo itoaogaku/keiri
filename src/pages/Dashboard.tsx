@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 import { computeTotals } from '../lib/calc'
@@ -6,6 +7,7 @@ import StatusBadge from '../components/StatusBadge'
 
 export default function Dashboard() {
   const { data, getCustomer } = useApp()
+  const [bizPeriod, setBizPeriod] = useState<'month' | 'all'>('month')
   const now = new Date()
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
@@ -15,6 +17,22 @@ export default function Dashboard() {
 
   const totalOf = (inv: (typeof data.invoices)[number]) =>
     computeTotals(inv.items, inv.issuer.taxMode).total
+
+  // 事業種別ごとの売上集計（今月／全期間で切替）
+  const bizBreakdown = useMemo(() => {
+    const source = bizPeriod === 'month' ? monthInvoices : data.invoices
+    const map = new Map<string, number>()
+    for (const inv of source) {
+      const key = inv.businessType || '未分類'
+      map.set(key, (map.get(key) ?? 0) + totalOf(inv))
+    }
+    const rows = [...map.entries()]
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+    const total = rows.reduce((s, r) => s + r.amount, 0)
+    return { rows, total }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bizPeriod, data.invoices])
 
   const salesTotal = monthInvoices.reduce((s, i) => s + totalOf(i), 0)
   const paidTotal = data.invoices
@@ -54,6 +72,69 @@ export default function Dashboard() {
             <div className="mt-1 text-xs text-slate-400">{c.sub}</div>
           </div>
         ))}
+      </div>
+
+      {/* 事業別売上 */}
+      <div className="mb-8 rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h2 className="font-semibold text-slate-800">事業別売上</h2>
+          <div className="flex overflow-hidden rounded-lg border border-slate-200 text-xs">
+            {(
+              [
+                ['month', '今月'],
+                ['all', '全期間'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setBizPeriod(key)}
+                className={`px-3 py-1.5 font-medium transition ${
+                  bizPeriod === key
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="px-5 py-4">
+          {bizBreakdown.rows.length === 0 ? (
+            <div className="py-6 text-center text-sm text-slate-400">
+              対象の請求書がありません
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bizBreakdown.rows.map((r) => {
+                const pct = bizBreakdown.total
+                  ? Math.round((r.amount / bizBreakdown.total) * 100)
+                  : 0
+                return (
+                  <div key={r.name}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-700">{r.name}</span>
+                      <span className="text-slate-600">
+                        {yen(r.amount)}
+                        <span className="ml-2 text-xs text-slate-400">{pct}%</span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-brand-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-semibold text-slate-800">
+                <span>合計</span>
+                <span>{yen(bizBreakdown.total)}</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">

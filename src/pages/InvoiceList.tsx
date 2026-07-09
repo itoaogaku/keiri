@@ -14,6 +14,7 @@ export default function InvoiceList() {
 
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all')
+  const [bizFilter, setBizFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('issueDate')
   const [sortAsc, setSortAsc] = useState(false)
 
@@ -23,6 +24,10 @@ export default function InvoiceList() {
     const q = query.trim().toLowerCase()
     let list = data.invoices.filter((inv) => {
       if (statusFilter !== 'all' && inv.status !== statusFilter) return false
+      if (bizFilter !== 'all') {
+        const b = inv.businessType || ''
+        if (bizFilter === '__none__' ? b !== '' : b !== bizFilter) return false
+      }
       if (!q) return true
       const customer = getCustomer(inv.customerId)?.companyName ?? ''
       return (
@@ -41,7 +46,10 @@ export default function InvoiceList() {
       return sortAsc ? cmp : -cmp
     })
     return list
-  }, [data.invoices, query, statusFilter, sortKey, sortAsc, getCustomer])
+  }, [data.invoices, query, statusFilter, bizFilter, sortKey, sortAsc, getCustomer])
+
+  // 絞り込み結果の合計金額（フィルタした事業の売上把握に便利）
+  const filteredTotal = rows.reduce((s, inv) => s + totalOf(inv), 0)
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v)
@@ -100,6 +108,28 @@ export default function InvoiceList() {
             </option>
           ))}
         </select>
+        <select
+          value={bizFilter}
+          onChange={(e) => setBizFilter(e.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        >
+          <option value="all">すべての事業種別</option>
+          {data.businessTypes.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+          <option value="__none__">未分類</option>
+        </select>
+      </div>
+
+      {/* 絞り込み結果の件数・合計 */}
+      <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
+        <span>{rows.length} 件</span>
+        <span>
+          合計金額{' '}
+          <span className="font-semibold text-slate-800">{yen(filteredTotal)}</span>
+        </span>
       </div>
 
       {/* テーブル */}
@@ -141,8 +171,15 @@ export default function InvoiceList() {
                     <div className="font-medium text-slate-800">{inv.invoiceNumber}</div>
                     <div className="text-xs text-slate-400">請求者: {inv.issuer.name}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {getCustomer(inv.customerId)?.companyName ?? '—'}
+                  <td className="px-4 py-3">
+                    <div className="text-slate-600">
+                      {getCustomer(inv.customerId)?.companyName ?? '—'}
+                    </div>
+                    {inv.businessType && (
+                      <div className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                        {inv.businessType}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{jpDate(inv.issueDate)}</td>
                   <td className="px-4 py-3 text-slate-600">{jpDate(inv.dueDate)}</td>
