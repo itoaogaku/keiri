@@ -2,7 +2,24 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 import { computeTotals, lineNet } from '../lib/calc'
 import { yen, jpDate } from '../lib/format'
+import { TAX_RATE_LABELS, type IssuerProfile } from '../types'
 import StatusBadge from '../components/StatusBadge'
+
+/** 振込先を1行ずつの表示用テキストに整形する（構造化 → 行配列） */
+function bankLines(issuer: IssuerProfile): string[] {
+  const lines: string[] = []
+  if (issuer.bankName) lines.push(`銀行名：${issuer.bankName}`)
+  if (issuer.branchName) lines.push(`支店名：${issuer.branchName}`)
+  if (issuer.accountNumber) {
+    lines.push(`${issuer.accountType || '普通'}：${issuer.accountNumber}`)
+  } else if (issuer.accountType) {
+    lines.push(issuer.accountType)
+  }
+  if (issuer.accountHolder) lines.push(`口座名：${issuer.accountHolder}`)
+  // 旧データ（1行テキスト）しか無い場合はそれを表示
+  if (lines.length === 0 && issuer.bankInfo) lines.push(issuer.bankInfo)
+  return lines
+}
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -67,7 +84,6 @@ export default function InvoiceDetail() {
           </div>
           <div className="text-right text-sm text-slate-600">
             <div>発行日：{jpDate(inv.issueDate)}</div>
-            <div>支払期限：{jpDate(inv.dueDate)}</div>
             <div className="no-print mt-2">
               <StatusBadge status={inv.status} />
             </div>
@@ -92,6 +108,9 @@ export default function InvoiceDetail() {
               <span className="text-sm text-slate-500">ご請求金額</span>
               <span className="ml-3 text-2xl font-bold text-slate-800">{yen(t.total)}</span>
               <span className="ml-1 text-sm text-slate-500">（税込）</span>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              支払期限：<span className="font-medium text-slate-800">{jpDate(inv.dueDate)}</span>
             </div>
           </div>
           <div className="text-sm text-slate-600">
@@ -125,7 +144,7 @@ export default function InvoiceDetail() {
                 <td className="py-2 text-slate-800">{it.name || '—'}</td>
                 <td className="py-2 text-right text-slate-600">{it.quantity.toLocaleString()}</td>
                 <td className="py-2 text-right text-slate-600">{yen(it.unitPrice)}</td>
-                <td className="py-2 text-center text-slate-600">{it.taxRate}%</td>
+                <td className="py-2 text-center text-slate-600">{TAX_RATE_LABELS[it.taxRate]}</td>
                 <td className="py-2 text-right font-medium text-slate-800">{yen(lineNet(it))}</td>
               </tr>
             ))}
@@ -164,6 +183,12 @@ export default function InvoiceDetail() {
                 </div>
               </>
             )}
+            {t.inclTotal > 0 && (
+              <div className="flex justify-between text-slate-500">
+                <span>税込入力ぶん</span>
+                <span>{yen(t.inclTotal)}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t-2 border-slate-300 pt-2 text-lg font-bold text-slate-800">
               <span>合計</span>
               <span>{yen(t.total)}</span>
@@ -174,7 +199,11 @@ export default function InvoiceDetail() {
         {/* 備考・振込先 */}
         <div className="mt-8 border-t border-slate-200 pt-4 text-sm text-slate-600">
           <div className="font-medium text-slate-700">お振込先</div>
-          <div>{inv.issuer.bankInfo}</div>
+          {bankLines(inv.issuer).length > 0 ? (
+            bankLines(inv.issuer).map((line, i) => <div key={i}>{line}</div>)
+          ) : (
+            <div className="text-slate-400">（未設定）</div>
+          )}
           {inv.notes && (
             <div className="mt-3">
               <div className="font-medium text-slate-700">備考</div>

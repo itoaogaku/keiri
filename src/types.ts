@@ -1,7 +1,17 @@
 // ===== ドメインモデル =====
 
-/** 消費税率（インボイス制度対応：軽減8% / 標準10%） */
-export type TaxRate = 8 | 10
+/**
+ * 明細の税区分。
+ * - 10 / 8 : 標準10% / 軽減8%（税抜金額に消費税を加算）
+ * - 0      : 税込（入力額をそのまま合計に計上。消費税を加算しない）
+ */
+export type TaxRate = 10 | 8 | 0
+
+export const TAX_RATE_LABELS: Record<TaxRate, string> = {
+  10: '10%',
+  8: '8%',
+  0: '税込',
+}
 
 /** 請求書ステータス */
 export type InvoiceStatus =
@@ -65,8 +75,14 @@ export interface IssuerProfile {
   address: string
   tel: string
   email: string
-  /** 振込先など */
-  bankInfo: string
+  /** 振込先（構造化） */
+  bankName: string // 銀行名
+  branchName: string // 支店名
+  accountType: string // 種別（普通／当座）
+  accountNumber: string // 口座番号
+  accountHolder: string // 口座名義
+  /** 旧データ互換（1行テキストの振込先） */
+  bankInfo?: string
 }
 
 /** 請求書 */

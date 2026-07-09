@@ -3,58 +3,34 @@ import { newId } from './invoice'
 
 const STORAGE_KEY = 'keiri.appdata.v2'
 
+function makeIssuer(
+  id: string,
+  name: string,
+  taxMode: IssuerProfile['taxMode']
+): IssuerProfile {
+  return {
+    id,
+    name,
+    taxMode,
+    registrationNumber: '',
+    address: '',
+    tel: '',
+    email: '',
+    bankName: '',
+    branchName: '',
+    accountType: '普通',
+    accountNumber: '',
+    accountHolder: '',
+  }
+}
+
 /** 使い分け可能な5つの請求者プロファイル（初期値） */
 export const DEFAULT_ISSUERS: IssuerProfile[] = [
-  {
-    id: 'issuer-acc-kk',
-    name: '株式会社アスリートキャリアセンター',
-    taxMode: 'taxable',
-    registrationNumber: '',
-    address: '',
-    tel: '',
-    email: '',
-    bankInfo: '',
-  },
-  {
-    id: 'issuer-acc-shadan-exempt',
-    name: '一般社団法人アスリートキャリアセンター（非課税枠）',
-    taxMode: 'exempt',
-    registrationNumber: '',
-    address: '',
-    tel: '',
-    email: '',
-    bankInfo: '',
-  },
-  {
-    id: 'issuer-acc-shadan-taxable',
-    name: '一般社団法人アスリートキャリアセンター（課税枠）',
-    taxMode: 'taxable',
-    registrationNumber: '',
-    address: '',
-    tel: '',
-    email: '',
-    bankInfo: '',
-  },
-  {
-    id: 'issuer-hara-ds',
-    name: '株式会社原D&S',
-    taxMode: 'taxable',
-    registrationNumber: '',
-    address: '',
-    tel: '',
-    email: '',
-    bankInfo: '',
-  },
-  {
-    id: 'issuer-aogaku-tf',
-    name: '青山学院大学陸上競技部',
-    taxMode: 'taxable',
-    registrationNumber: '',
-    address: '',
-    tel: '',
-    email: '',
-    bankInfo: '',
-  },
+  makeIssuer('issuer-acc-kk', '株式会社アスリートキャリアセンター', 'taxable'),
+  makeIssuer('issuer-acc-shadan-exempt', '一般社団法人アスリートキャリアセンター（非課税枠）', 'exempt'),
+  makeIssuer('issuer-acc-shadan-taxable', '一般社団法人アスリートキャリアセンター（課税枠）', 'taxable'),
+  makeIssuer('issuer-hara-ds', '株式会社原D&S', 'taxable'),
+  makeIssuer('issuer-aogaku-tf', '青山学院大学陸上競技部', 'taxable'),
 ]
 
 /** 初回起動時のデモデータ */
@@ -80,14 +56,15 @@ function seedData(): AppData {
 
   const now = new Date()
   const iso = (d: Date) => d.toISOString().slice(0, 10)
-  const dueEnd = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+  const compact = iso(now).replace(/-/g, '')
+  const dueEnd = iso(new Date(now.getFullYear(), now.getMonth() + 2, 0)) // 翌月末
   const taxableIssuer = DEFAULT_ISSUERS[0]
   const exemptIssuer = DEFAULT_ISSUERS[1]
 
   const invoices: Invoice[] = [
     {
       id: newId(),
-      invoiceNumber: `INV-${iso(now).replace(/-/g, '')}-001`,
+      invoiceNumber: `${compact}01`,
       issueDate: iso(now),
       dueDate: dueEnd,
       status: 'issued',
@@ -104,7 +81,7 @@ function seedData(): AppData {
     },
     {
       id: newId(),
-      invoiceNumber: `INV-${iso(now).replace(/-/g, '')}-002`,
+      invoiceNumber: `${compact}02`,
       issueDate: iso(now),
       dueDate: dueEnd,
       status: 'paid',
@@ -123,6 +100,18 @@ function seedData(): AppData {
   return { customers, invoices, issuers: DEFAULT_ISSUERS }
 }
 
+/** 旧データの請求者に、後から追加した振込先フィールドを補完する */
+function normalizeIssuer(i: IssuerProfile): IssuerProfile {
+  return {
+    ...i,
+    bankName: i.bankName ?? '',
+    branchName: i.branchName ?? '',
+    accountType: i.accountType ?? '普通',
+    accountNumber: i.accountNumber ?? '',
+    accountHolder: i.accountHolder ?? '',
+  }
+}
+
 export function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -131,6 +120,8 @@ export function loadData(): AppData {
       // 請求者が空なら既定を補完（マイグレーション保険）
       if (!parsed.issuers || parsed.issuers.length === 0) {
         parsed.issuers = DEFAULT_ISSUERS
+      } else {
+        parsed.issuers = parsed.issuers.map(normalizeIssuer)
       }
       return parsed
     }

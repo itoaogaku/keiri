@@ -72,15 +72,18 @@ function doPost(e) {
 
 function computeTotals(items, taxMode) {
   const net = { 8: 0, 10: 0 }
+  let incl = 0
   ;(items || []).forEach(function (it) {
-    net[it.taxRate] += Math.round((it.quantity || 0) * (it.unitPrice || 0))
+    const amount = Math.round((it.quantity || 0) * (it.unitPrice || 0))
+    if (Number(it.taxRate) === 0) incl += amount // 税込（消費税を加算しない）
+    else net[it.taxRate] += amount
   })
   const exempt = taxMode === 'exempt'
   const tax8 = exempt ? 0 : Math.floor(net[8] * 0.08)
   const tax10 = exempt ? 0 : Math.floor(net[10] * 0.1)
   const subtotal = net[8] + net[10]
   const taxTotal = tax8 + tax10
-  return { subtotal: subtotal, taxTotal: taxTotal, total: subtotal + taxTotal }
+  return { subtotal: subtotal, taxTotal: taxTotal, total: subtotal + taxTotal + incl }
 }
 
 function safeParse(str, fallback) {

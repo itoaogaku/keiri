@@ -57,7 +57,11 @@ const EMPTY: Omit<IssuerProfile, 'id'> = {
   address: '',
   tel: '',
   email: '',
-  bankInfo: '',
+  bankName: '',
+  branchName: '',
+  accountType: '普通',
+  accountNumber: '',
+  accountHolder: '',
 }
 
 export default function Settings() {
@@ -189,7 +193,6 @@ export default function Settings() {
                   ['address', '住所'],
                   ['tel', '電話番号'],
                   ['email', 'メールアドレス'],
-                  ['bankInfo', '振込先'],
                 ] as const
               ).map(([key, label]) => (
                 <div key={key}>
@@ -201,6 +204,37 @@ export default function Settings() {
                   />
                 </div>
               ))}
+
+              <div className="border-t border-slate-100 pt-3">
+                <div className="mb-2 text-xs font-semibold text-slate-600">振込先</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {(
+                    [
+                      ['bankName', '銀行名'],
+                      ['branchName', '支店名'],
+                      ['accountType', '種別（普通/当座）'],
+                      ['accountNumber', '口座番号'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
+                      <input
+                        className={inputCls}
+                        value={draft[key]}
+                        onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">口座名（名義）</label>
+                  <input
+                    className={inputCls}
+                    value={draft.accountHolder}
+                    onChange={(e) => setDraft((d) => ({ ...d, accountHolder: e.target.value }))}
+                  />
+                </div>
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button

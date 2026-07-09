@@ -23,6 +23,11 @@ export function endOfMonth(base: Date): string {
   return toISODate(new Date(base.getFullYear(), base.getMonth() + 1, 0))
 }
 
+/** 翌月末日を YYYY-MM-DD で返す */
+export function endOfNextMonth(base: Date): string {
+  return toISODate(new Date(base.getFullYear(), base.getMonth() + 2, 0))
+}
+
 /** YYYYMMDD */
 export function compactDate(d: Date): string {
   return toISODate(d).replace(/-/g, '')

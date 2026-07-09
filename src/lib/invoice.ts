@@ -1,5 +1,5 @@
 import type { Invoice, InvoiceItem, IssuerProfile } from '../types'
-import { compactDate, endOfMonth, toISODate } from './format'
+import { compactDate, endOfNextMonth, toISODate } from './format'
 
 /** 簡易ユニークID */
 export function newId(): string {
@@ -9,21 +9,20 @@ export function newId(): string {
 }
 
 /**
- * 請求書番号を採番する： INV-YYYYMMDD-XXX
- * その日にすでに発行済みの番号を見て、連番(XXX)をインクリメントする。
+ * 請求書番号を採番する： YYYYMMDD + 2桁連番（例：2026070901）
+ * その日にすでに発行済みの番号を見て、連番をインクリメントする。
  */
 export function generateInvoiceNumber(
   invoices: Invoice[],
   base: Date = new Date()
 ): string {
-  const datePart = compactDate(base)
-  const prefix = `INV-${datePart}-`
+  const datePart = compactDate(base) // YYYYMMDD
   const seqUsed = invoices
-    .filter((inv) => inv.invoiceNumber.startsWith(prefix))
-    .map((inv) => parseInt(inv.invoiceNumber.slice(prefix.length), 10))
+    .filter((inv) => /^\d{10}$/.test(inv.invoiceNumber) && inv.invoiceNumber.startsWith(datePart))
+    .map((inv) => parseInt(inv.invoiceNumber.slice(8), 10))
     .filter((n) => !Number.isNaN(n))
   const next = (seqUsed.length ? Math.max(...seqUsed) : 0) + 1
-  return prefix + String(next).padStart(3, '0')
+  return datePart + String(next).padStart(2, '0')
 }
 
 function blankItem(): InvoiceItem {
@@ -41,7 +40,7 @@ export function createBlankInvoice(
     id: '',
     invoiceNumber: generateInvoiceNumber(invoices, now),
     issueDate: toISODate(now),
-    dueDate: endOfMonth(now),
+    dueDate: endOfNextMonth(now),
     status: 'draft',
     customerId: '',
     issuerId: issuer.id,
@@ -73,7 +72,7 @@ export function copyInvoice(
     id: '', // 保存時に採番
     invoiceNumber: generateInvoiceNumber(allInvoices, base), // 新規則で採番
     issueDate: toISODate(base), // 当日
-    dueDate: endOfMonth(base), // 当月末
+    dueDate: endOfNextMonth(base), // 翌月末
     status: 'draft', // 下書きに戻す
     customerId: src.customerId, // 顧客を引き継ぐ
     issuerId: src.issuerId, // 請求者を引き継ぐ

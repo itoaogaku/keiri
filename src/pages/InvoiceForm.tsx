@@ -230,7 +230,7 @@ export default function InvoiceForm() {
                   <th className="pb-2 w-20 text-right">数量</th>
                   <th className="pb-2 w-32 text-right">単価</th>
                   <th className="pb-2 w-24">税率</th>
-                  <th className="pb-2 w-32 text-right">金額(税抜)</th>
+                  <th className="pb-2 w-32 text-right">金額</th>
                   <th className="pb-2 w-10"></th>
                 </tr>
               </thead>
@@ -273,6 +273,7 @@ export default function InvoiceForm() {
                       >
                         <option value={10}>10%</option>
                         <option value={8}>8%</option>
+                        <option value={0}>税込</option>
                       </select>
                     </td>
                     <td className="py-1 pr-2 text-right font-medium text-slate-700">
@@ -321,6 +322,12 @@ export default function InvoiceForm() {
                     </div>
                   )}
                 </>
+              )}
+              {totals.inclTotal > 0 && (
+                <div className="flex justify-between text-slate-500">
+                  <span>税込入力ぶん</span>
+                  <span>{yen(totals.inclTotal)}</span>
+                </div>
               )}
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-800">
                 <span>{form.issuer.taxMode === 'exempt' ? '合計' : '合計（税込）'}</span>
