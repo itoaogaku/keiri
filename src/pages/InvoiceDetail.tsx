@@ -51,6 +51,25 @@ export default function InvoiceDetail() {
   // 角印は請求者プロファイル（最新）から参照する（請求書には保存していない）
   const seal = getIssuer(inv.issuerId)?.sealImage ?? inv.issuer.sealImage
 
+  // PDF保存時の初期ファイル名を「請求書番号_請求先敬称」にする。
+  // ブラウザは <title> を既定のファイル名に使うため、印刷直前だけ差し替える。
+  const handlePrint = () => {
+    const recipient = customer?.companyName ?? '請求先'
+    const honorific = inv.honorific ?? '御中'
+    const raw = `${inv.invoiceNumber}_${recipient}${honorific}`
+    const safe = raw.replace(/[\\/:*?"<>|]/g, '_').trim()
+    const prevTitle = document.title
+    const restore = () => {
+      document.title = prevTitle
+      window.removeEventListener('afterprint', restore)
+    }
+    window.addEventListener('afterprint', restore)
+    document.title = safe
+    window.print()
+    // afterprint が発火しない環境向けの保険
+    setTimeout(restore, 1000)
+  }
+
   return (
     <div>
       {/* 操作バー（印刷時は非表示） */}
@@ -108,7 +127,7 @@ export default function InvoiceDetail() {
             ✏️ 編集
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
           >
             ⬇ PDFダウンロード
