@@ -28,6 +28,10 @@ const INVOICE_HEADERS = [
 ]
 const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
+// 請求者ごとの売上シート
+const ISSUER_SHEET_PREFIX = '売上_'
+const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '合計']
+
 // 「作成者」列の位置（0始まり）
 const CUSTOMER_CREATOR_IDX = 6
 const INVOICE_CREATOR_IDX = 20
@@ -119,9 +123,11 @@ function doPost(e) {
         return jsonOut({ ok: true })
       case 'upsertInvoice':
         upsertInvoice(user, body.invoice, body.customerName)
+        try { rebuildIssuerSheets() } catch (e2) {}
         return jsonOut({ ok: true })
       case 'deleteInvoice':
         deleteEntity(user, INVOICES, INVOICE_HEADERS, INVOICE_CREATOR_IDX, body.id)
+        try { rebuildIssuerSheets() } catch (e3) {}
         return jsonOut({ ok: true })
     }
     return jsonOut({ ok: false, error: 'unknown action' })
@@ -269,4 +275,67 @@ function getStateFor(user) {
     return String(b.createdAt).localeCompare(String(a.createdAt))
   })
   return { ok: true, customers: customers, invoices: invoices }
+}
+
+// ================= 請求者ごとの売上シート =================
+
+/** シート名に使えない文字を除去して「売上_<請求者>」を返す */
+function issuerSheetName(issuer) {
+  const safe = String(issuer || '（未設定）').replace(/[\[\]\*\?\/\\:]/g, ' ').slice(0, 90)
+  return ISSUER_SHEET_PREFIX + safe
+}
+
+/**
+ * 「請求書」シートの内容を請求者ごとに別シート（売上_<請求者>）へ自動振り分け。
+ * 各シートは A:事業種別 / B:請求書番号 / C:顧客名 / D:ステータス / E:発行日 / F:合計。
+ * 請求書の作成・編集・削除のたびに全再構築する。手動実行も可。
+ */
+function rebuildIssuerSheets() {
+  const invRows = readAll(getSheet(INVOICES, INVOICE_HEADERS))
+  const groups = {}
+  invRows.forEach(function (r) {
+    if (!r[0]) return
+    const issuer = String(r[5] || '（未設定）')
+    if (!groups[issuer]) groups[issuer] = []
+    groups[issuer].push({
+      biz: r[19] || '',           // 事業種別
+      number: r[1] || '',         // 請求書番号
+      customer: r[8] || '',       // 顧客名
+      status: r[4] || '',         // ステータス
+      issueDate: r[2] || '',      // 発行日
+      total: Number(r[11]) || 0,  // 合計
+    })
+  })
+
+  const book = ss()
+  const targetNames = {}
+  Object.keys(groups).forEach(function (issuer) {
+    targetNames[issuerSheetName(issuer)] = true
+  })
+
+  // 対象外になった売上シート（請求者名変更・全削除など）は中身を空にする
+  book.getSheets().forEach(function (s) {
+    const nm = s.getName()
+    if (nm.indexOf(ISSUER_SHEET_PREFIX) === 0 && !targetNames[nm]) s.clearContents()
+  })
+
+  Object.keys(groups).forEach(function (issuer) {
+    const name = issuerSheetName(issuer)
+    let sh = book.getSheetByName(name)
+    if (!sh) sh = book.insertSheet(name)
+    sh.clearContents()
+
+    const list = groups[issuer].sort(function (a, b) {
+      return String(a.issueDate).localeCompare(String(b.issueDate))
+    })
+    const out = [ISSUER_VIEW_HEADERS]
+    let sum = 0
+    list.forEach(function (x) {
+      out.push([x.biz, x.number, x.customer, x.status, x.issueDate, x.total])
+      sum += x.total
+    })
+    out.push(['', '', '', '', '合計', sum])
+
+    sh.getRange(1, 1, out.length, ISSUER_VIEW_HEADERS.length).setValues(out)
+  })
 }
