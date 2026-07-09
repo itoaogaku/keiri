@@ -119,13 +119,12 @@ export default function InvoiceDetail() {
         <div className="mt-8 grid grid-cols-2 gap-8">
           <div>
             <div className="border-b-2 border-slate-800 pb-1 text-lg font-semibold text-slate-800">
-              {customer?.companyName ?? '（顧客未設定）'} 御中
+              {customer?.companyName ?? '（顧客未設定）'} {inv.honorific ?? '御中'}
             </div>
             {customer && (
               <div className="mt-2 text-sm text-slate-600">
-                <div>{customer.contactName} 様</div>
-                <div>{customer.address}</div>
-                <div>{customer.phone}</div>
+                {customer.address && <div>{customer.address}</div>}
+                {customer.phone && <div>{customer.phone}</div>}
               </div>
             )}
             <div className="mt-6 text-sm text-slate-600">下記の通りご請求申し上げます。</div>

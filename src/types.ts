@@ -13,6 +13,9 @@ export const TAX_RATE_LABELS: Record<TaxRate, string> = {
   0: '税込',
 }
 
+/** 宛名の敬称 */
+export type Honorific = '御中' | '様'
+
 /** 請求書ステータス */
 export type InvoiceStatus =
   | 'draft' // 下書き
@@ -95,6 +98,8 @@ export interface Invoice {
   dueDate: string // YYYY-MM-DD
   status: InvoiceStatus
   customerId: string
+  /** 宛名の敬称（御中／様。既定は御中） */
+  honorific: Honorific
   /** 使用した請求者プロファイルのID */
   issuerId: string
   /** 発行時点の請求者スナップショット（後から設定変更されても過去分は不変） */

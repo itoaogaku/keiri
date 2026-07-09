@@ -69,6 +69,7 @@ function seedData(): AppData {
       dueDate: dueEnd,
       status: 'issued',
       customerId: customers[0].id,
+      honorific: '御中',
       issuerId: taxableIssuer.id,
       issuer: { ...taxableIssuer },
       items: [
@@ -86,6 +87,7 @@ function seedData(): AppData {
       dueDate: dueEnd,
       status: 'paid',
       customerId: customers[1].id,
+      honorific: '御中',
       issuerId: exemptIssuer.id,
       issuer: { ...exemptIssuer },
       items: [

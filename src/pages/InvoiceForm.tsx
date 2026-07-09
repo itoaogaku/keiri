@@ -12,6 +12,7 @@ import { yen } from '../lib/format'
 import {
   STATUS_LABELS,
   TAX_MODE_LABELS,
+  type Honorific,
   type Invoice,
   type InvoiceItem,
   type InvoiceStatus,
@@ -91,7 +92,11 @@ export default function InvoiceForm() {
     }))
 
   const handleSave = (status?: InvoiceStatus) => {
-    const payload: Invoice = { ...form, status: status ?? form.status }
+    const payload: Invoice = {
+      ...form,
+      status: status ?? form.status,
+      honorific: form.honorific ?? '御中',
+    }
     if (isEdit) {
       updateInvoice(payload)
       navigate(`/invoices/${payload.id}`)
@@ -188,7 +193,7 @@ export default function InvoiceForm() {
                 onChange={(e) => set('dueDate', e.target.value)}
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">請求先（顧客）</label>
               <select
                 className={inputCls}
@@ -207,6 +212,17 @@ export default function InvoiceForm() {
                   顧客が未登録です。<Link to="/customers" className="underline">顧客一覧</Link>から登録してください。
                 </p>
               )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">敬称</label>
+              <select
+                className={inputCls}
+                value={form.honorific ?? '御中'}
+                onChange={(e) => set('honorific', e.target.value as Honorific)}
+              >
+                <option value="御中">御中</option>
+                <option value="様">様</option>
+              </select>
             </div>
           </div>
         </section>

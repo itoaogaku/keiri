@@ -54,6 +54,7 @@ export function createBlankInvoice(
     dueDate: endOfNextMonth(now),
     status: 'draft',
     customerId: '',
+    honorific: '御中',
     issuerId: issuer.id,
     issuer: snapshotIssuer(issuer),
     items: [blankItem()],
@@ -86,6 +87,7 @@ export function copyInvoice(
     dueDate: endOfNextMonth(base), // 翌月末
     status: 'draft', // 下書きに戻す
     customerId: src.customerId, // 顧客を引き継ぐ
+    honorific: src.honorific ?? '御中', // 敬称を引き継ぐ
     issuerId: src.issuerId, // 請求者を引き継ぐ
     issuer: snapshotIssuer(src.issuer), // 請求者スナップショットを引き継ぐ（角印除く）
     items: src.items.map((it) => ({ ...it, id: newId() })), // 明細をディープコピー

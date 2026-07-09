@@ -20,7 +20,7 @@ const CUSTOMER_HEADERS = ['id', '企業名', '担当者', 'メール', '住所',
 const INVOICE_HEADERS = [
   'id', '請求書番号', '発行日', '支払期限', 'ステータス', '請求者', '課税区分',
   '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
-  '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時',
+  '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称',
 ]
 
 const STATUS_LABELS = {
@@ -37,7 +37,10 @@ function getSheet(name, headers) {
   let sh = book.getSheetByName(name)
   if (!sh) sh = book.insertSheet(name)
   const first = sh.getRange(1, 1, 1, headers.length).getValues()[0]
-  if (first.join('') === '') sh.getRange(1, 1, 1, headers.length).setValues([headers])
+  // ヘッダが空、または列が増えた場合は書き直す（後から列を追加しても追従）
+  if (first.join('') === '' || first[headers.length - 1] !== headers[headers.length - 1]) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers])
+  }
   return sh
 }
 
@@ -139,6 +142,7 @@ function upsertInvoice(inv, customerName) {
     (inv.issuer && inv.issuer.registrationNumber) || '',
     JSON.stringify(inv.items), JSON.stringify(inv.issuer || {}),
     inv.notes || '', inv.createdAt || '', inv.updatedAt || '',
+    inv.honorific || '御中',
   ]
   upsert(sh, inv.id, row)
 }
@@ -160,6 +164,7 @@ function getState() {
       customerId: r[7], issuerId: issuer.id || '', issuer: issuer,
       items: safeParse(r[13], []),
       notes: r[15], createdAt: r[16], updatedAt: r[17],
+      honorific: r[18] || '御中',
     }
   })
   invoices.sort(function (a, b) {
