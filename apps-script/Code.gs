@@ -158,6 +158,16 @@ function safeParse(str, fallback) {
   try { return JSON.parse(str) } catch (e) { return fallback }
 }
 
+/** セル値を YYYY-MM-DD 文字列に整える（Dateに自動変換されていても正しく戻す） */
+function toYmd(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, ss().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
+  }
+  const s = String(v == null ? '' : v)
+  const m = s.match(/^\d{4}-\d{2}-\d{2}/)
+  return m ? m[0] : s
+}
+
 // ================= 行操作 =================
 
 function findRow(sh, id) {
@@ -248,9 +258,12 @@ function getStateFor(user) {
     .filter(function (r) { return user.isOwner || normEmail(r[CUSTOMER_CREATOR_IDX]) === em })
     .map(function (r) {
       return {
-        id: r[0], companyName: r[1], contactName: r[2],
-        email: r[3], address: r[4], phone: r[5],
-        creator: r[CUSTOMER_CREATOR_IDX] || '',
+        id: String(r[0]), companyName: String(r[1] == null ? '' : r[1]),
+        contactName: String(r[2] == null ? '' : r[2]),
+        email: String(r[3] == null ? '' : r[3]),
+        address: String(r[4] == null ? '' : r[4]),
+        phone: String(r[5] == null ? '' : r[5]),
+        creator: String(r[CUSTOMER_CREATOR_IDX] == null ? '' : r[CUSTOMER_CREATOR_IDX]),
       }
     })
 
@@ -260,14 +273,17 @@ function getStateFor(user) {
     .map(function (r) {
       const issuer = safeParse(r[14], {})
       return {
-        id: r[0], invoiceNumber: r[1], issueDate: r[2], dueDate: r[3],
+        id: String(r[0]), invoiceNumber: String(r[1]),
+        issueDate: toYmd(r[2]), dueDate: toYmd(r[3]),
         status: STATUS_KEYS[r[4]] || 'draft',
-        customerId: r[7], issuerId: issuer.id || '', issuer: issuer,
+        customerId: String(r[7]), issuerId: issuer.id || '', issuer: issuer,
         items: safeParse(r[13], []),
-        notes: r[15], createdAt: r[16], updatedAt: r[17],
+        notes: String(r[15] == null ? '' : r[15]),
+        createdAt: String(r[16] == null ? '' : r[16]),
+        updatedAt: String(r[17] == null ? '' : r[17]),
         honorific: r[18] || '御中',
-        businessType: r[19] || '',
-        creator: r[INVOICE_CREATOR_IDX] || '',
+        businessType: String(r[19] == null ? '' : r[19]),
+        creator: String(r[INVOICE_CREATOR_IDX] == null ? '' : r[INVOICE_CREATOR_IDX]),
       }
     })
 

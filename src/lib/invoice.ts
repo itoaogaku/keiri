@@ -18,8 +18,9 @@ export function generateInvoiceNumber(
 ): string {
   const datePart = compactDate(base) // YYYYMMDD
   const seqUsed = invoices
-    .filter((inv) => /^\d{10}$/.test(inv.invoiceNumber) && inv.invoiceNumber.startsWith(datePart))
-    .map((inv) => parseInt(inv.invoiceNumber.slice(8), 10))
+    .map((inv) => String(inv.invoiceNumber)) // シート由来で数値になる場合に備え文字列化
+    .filter((num) => /^\d{10}$/.test(num) && num.startsWith(datePart))
+    .map((num) => parseInt(num.slice(8), 10))
     .filter((n) => !Number.isNaN(n))
   const next = (seqUsed.length ? Math.max(...seqUsed) : 0) + 1
   return datePart + String(next).padStart(2, '0')

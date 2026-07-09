@@ -52,8 +52,73 @@ export async function login(
 interface StateResult {
   ok?: boolean
   error?: string
-  customers?: Customer[]
-  invoices?: Invoice[]
+  customers?: unknown[]
+  invoices?: unknown[]
+}
+
+// ---- 型の正規化 ----
+// スプレッドシートは "2026070901" のような値を数値として返すことがあるため、
+// アプリが期待する型（文字列・数値）へ明示的に変換して事故を防ぐ。
+const str = (v: unknown): string => (v == null ? '' : String(v))
+const numOr = (v: unknown, d = 0): number => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : d
+}
+/** 日付を YYYY-MM-DD に正規化（ISO日時が来ても日付部分を取り出す） */
+const dateStr = (v: unknown): string => {
+  const s = str(v)
+  const m = s.match(/\d{4}-\d{2}-\d{2}/)
+  return m ? m[0] : s
+}
+
+function normItem(it: Record<string, unknown>): Record<string, unknown> {
+  const rate = numOr(it.taxRate, 10)
+  return {
+    id: str(it.id) || Math.random().toString(36).slice(2, 8),
+    name: str(it.name),
+    quantity: numOr(it.quantity),
+    unitPrice: numOr(it.unitPrice),
+    taxRate: rate === 0 || rate === 8 || rate === 10 ? rate : 10,
+  }
+}
+
+function normCustomer(c: Record<string, unknown>): Customer {
+  return {
+    id: str(c.id),
+    companyName: str(c.companyName),
+    contactName: str(c.contactName),
+    email: str(c.email),
+    address: str(c.address),
+    phone: str(c.phone),
+    creator: str(c.creator),
+  }
+}
+
+function normInvoice(inv: Record<string, unknown>): Invoice {
+  const issuer = (inv.issuer && typeof inv.issuer === 'object' ? inv.issuer : {}) as Record<string, unknown>
+  const items = Array.isArray(inv.items) ? inv.items : []
+  return {
+    id: str(inv.id),
+    invoiceNumber: str(inv.invoiceNumber),
+    issueDate: dateStr(inv.issueDate),
+    dueDate: dateStr(inv.dueDate),
+    status: (str(inv.status) || 'draft') as Invoice['status'],
+    customerId: str(inv.customerId),
+    businessType: str(inv.businessType),
+    honorific: inv.honorific === '様' ? '様' : '御中',
+    issuerId: str(inv.issuerId),
+    issuer: {
+      ...(issuer as object),
+      id: str(issuer.id),
+      name: str(issuer.name),
+      taxMode: issuer.taxMode === 'exempt' ? 'exempt' : 'taxable',
+    } as Invoice['issuer'],
+    items: items.map((it) => normItem(it as Record<string, unknown>)) as unknown as Invoice['items'],
+    notes: str(inv.notes),
+    createdAt: str(inv.createdAt),
+    updatedAt: str(inv.updatedAt),
+    creator: str(inv.creator),
+  }
 }
 
 /** 認証付きで、権限に応じたデータを取得 */
@@ -63,7 +128,10 @@ export async function fetchState(
 ): Promise<{ customers: Customer[]; invoices: Invoice[] }> {
   const res = await post<StateResult>(url, { action: 'state', auth })
   if (res.ok === false) throw new Error(res.error || 'state failed')
-  return { customers: res.customers ?? [], invoices: res.invoices ?? [] }
+  return {
+    customers: (res.customers ?? []).map((c) => normCustomer(c as Record<string, unknown>)),
+    invoices: (res.invoices ?? []).map((i) => normInvoice(i as Record<string, unknown>)),
+  }
 }
 
 export const remote = {

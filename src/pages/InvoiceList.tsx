@@ -31,7 +31,7 @@ export default function InvoiceList() {
       if (!q) return true
       const customer = getCustomer(inv.customerId)?.companyName ?? ''
       return (
-        inv.invoiceNumber.toLowerCase().includes(q) ||
+        String(inv.invoiceNumber).toLowerCase().includes(q) ||
         customer.toLowerCase().includes(q) ||
         inv.items.some((it) => it.name.toLowerCase().includes(q))
       )
@@ -41,8 +41,8 @@ export default function InvoiceList() {
       let cmp = 0
       if (sortKey === 'total') cmp = totalOf(a) - totalOf(b)
       else if (sortKey === 'invoiceNumber')
-        cmp = a.invoiceNumber.localeCompare(b.invoiceNumber)
-      else cmp = a.issueDate.localeCompare(b.issueDate)
+        cmp = String(a.invoiceNumber).localeCompare(String(b.invoiceNumber))
+      else cmp = String(a.issueDate).localeCompare(String(b.issueDate))
       return sortAsc ? cmp : -cmp
     })
     return list
