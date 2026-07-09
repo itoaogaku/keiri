@@ -125,10 +125,22 @@ function BusinessTypesSection() {
 }
 
 export default function Settings() {
-  const { data, addIssuer, updateIssuer, deleteIssuer } = useApp()
+  const { data, session, addIssuer, updateIssuer, deleteIssuer } = useApp()
   const [editing, setEditing] = useState<IssuerProfile | null>(null)
   const [draft, setDraft] = useState<Omit<IssuerProfile, 'id'>>(EMPTY)
   const [open, setOpen] = useState(false)
+
+  // 制限ユーザーは設定を変更できない
+  if (session && session.role !== 'owner') {
+    return (
+      <div>
+        <h1 className="mb-4 text-2xl font-bold text-slate-800">設定</h1>
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-500">
+          この画面はオーナー専用です。
+        </div>
+      </div>
+    )
+  }
 
   const inputCls =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'

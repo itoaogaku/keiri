@@ -6,8 +6,13 @@ import InvoiceForm from './pages/InvoiceForm'
 import InvoiceDetail from './pages/InvoiceDetail'
 import CustomerList from './pages/CustomerList'
 import Settings from './pages/Settings'
+import Login from './pages/Login'
+import { useApp } from './store/AppContext'
 
 export default function App() {
+  const { needsLogin } = useApp()
+  if (needsLogin) return <Login />
+
   return (
     <Routes>
       <Route element={<Layout />}>

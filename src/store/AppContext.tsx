@@ -8,10 +8,28 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
+import type { AppData, Customer, Invoice, IssuerProfile, Session } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
-import { getGasUrl, setGasUrl as persistGasUrl, fetchState, remote } from '../lib/gas'
+import {
+  getGasUrl,
+  setGasUrl as persistGasUrl,
+  fetchState,
+  login as gasLogin,
+  remote,
+  type Auth,
+} from '../lib/gas'
+
+const SESSION_KEY = 'keiri.session'
+
+function loadSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    return raw ? (JSON.parse(raw) as Session) : null
+  } catch {
+    return null
+  }
+}
 
 interface AppContextValue {
   data: AppData
@@ -21,6 +39,12 @@ interface AppContextValue {
   gasUrl: string
   /** GAS URL を設定・保存して再接続する */
   setGasUrl: (url: string) => void
+  // 認証
+  session: Session | null
+  /** GAS連携中でログインが必要な状態か */
+  needsLogin: boolean
+  login: (email: string, pin: string) => Promise<{ ok: boolean; error?: string }>
+  logout: () => void
   // 請求書
   getInvoice: (id: string) => Invoice | undefined
   addInvoice: (inv: Invoice) => Invoice
@@ -47,33 +71,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData())
   const [syncEnabled, setSyncEnabled] = useState(false)
   const [gasUrl, setGasUrlState] = useState<string>(() => getGasUrl())
+  const [session, setSession] = useState<Session | null>(() => loadSession())
 
   // コールバック内から最新値を参照するための ref
   const dataRef = useRef(data)
   const gasRef = useRef(gasUrl)
+  const sessionRef = useRef(session)
   useEffect(() => {
     dataRef.current = data
   }, [data])
   useEffect(() => {
     gasRef.current = gasUrl
   }, [gasUrl])
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  // GAS未設定なら誰でも利用可（ローカル単独）。設定済みならログイン必須。
+  const needsLogin = Boolean(gasUrl) && !session
 
   // localStorage への即時キャッシュ（常に）
   useEffect(() => {
     saveData(data)
   }, [data])
 
-  // GAS URL が設定されていればリモート状態を取り込む（顧客・請求書）。
-  // 請求者(issuers)はクライアント設定として保持する。
+  const doLogout = useCallback(() => {
+    localStorage.removeItem(SESSION_KEY)
+    setSession(null)
+    setSyncEnabled(false)
+    // 表示中の他ユーザーデータを消去（設定は残す）
+    setData((d) => ({ ...d, customers: [], invoices: [] }))
+  }, [])
+
+  // GAS連携中かつログイン済みなら、権限に応じたデータを取り込む
   useEffect(() => {
     let cancelled = false
-    if (!gasUrl) {
+    if (!gasUrl || !session) {
       setSyncEnabled(false)
       return
     }
     ;(async () => {
       try {
-        const remoteState = await fetchState(gasUrl)
+        const remoteState = await fetchState(gasUrl, {
+          email: session.email,
+          pin: session.pin,
+        })
         if (cancelled) return
         setData((d) => ({
           ...d,
@@ -84,27 +126,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         if (cancelled) return
         setSyncEnabled(false)
-        console.warn(
-          '[keiri] スプレッドシートからの読み込みに失敗しました。localStorage を使用します。',
-          e
-        )
+        console.warn('[keiri] スプレッドシートからの読み込みに失敗しました。', e)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [gasUrl])
+  }, [gasUrl, session])
 
   const setGasUrl = useCallback((url: string) => {
     persistGasUrl(url)
     setGasUrlState(url.trim())
   }, [])
 
+  const login = useCallback(
+    async (email: string, pin: string): Promise<{ ok: boolean; error?: string }> => {
+      const url = gasRef.current
+      if (!url) return { ok: false, error: '先にスプレッドシート連携を設定してください' }
+      try {
+        const res = await gasLogin(url, email.trim(), pin.trim())
+        if (!res.ok || !res.user) {
+          return { ok: false, error: res.error || 'ログインに失敗しました' }
+        }
+        const s: Session = {
+          email: res.user.email,
+          name: res.user.name,
+          role: res.user.role,
+          pin: pin.trim(),
+        }
+        localStorage.setItem(SESSION_KEY, JSON.stringify(s))
+        setSession(s)
+        return { ok: true }
+      } catch (e) {
+        return { ok: false, error: '接続に失敗しました（URLをご確認ください）' }
+      }
+    },
+    []
+  )
+
   // スプレッドシートへの best-effort 書き込み（失敗しても UI は継続）
-  const push = (fn: (url: string) => Promise<unknown>) => {
+  const push = (fn: (url: string, auth: Auth) => Promise<unknown>) => {
     const url = gasRef.current
-    if (!url) return
-    fn(url).catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
+    const s = sessionRef.current
+    if (!url || !s) return
+    fn(url, { email: s.email, pin: s.pin }).catch((e) =>
+      console.warn('[keiri] スプレッドシート同期に失敗しました', e)
+    )
   }
 
   const customerName = (customerId: string) =>
@@ -122,7 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: new Date().toISOString(),
     }
     setData((d) => ({ ...d, invoices: [saved, ...d.invoices] }))
-    push((url) => remote.saveInvoice(url, saved, customerName(saved.customerId)))
+    push((url, auth) => remote.saveInvoice(url, auth, saved, customerName(saved.customerId)))
     return saved
   }, [])
 
@@ -132,12 +199,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       invoices: d.invoices.map((i) => (i.id === saved.id ? saved : i)),
     }))
-    push((url) => remote.saveInvoice(url, saved, customerName(saved.customerId)))
+    push((url, auth) => remote.saveInvoice(url, auth, saved, customerName(saved.customerId)))
   }, [])
 
   const deleteInvoice = useCallback((id: string) => {
     setData((d) => ({ ...d, invoices: d.invoices.filter((i) => i.id !== id) }))
-    push((url) => remote.deleteInvoice(url, id))
+    push((url, auth) => remote.deleteInvoice(url, auth, id))
   }, [])
 
   const getCustomer = useCallback(
@@ -148,7 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCustomer = useCallback((c: Omit<Customer, 'id'>): Customer => {
     const saved: Customer = { ...c, id: newId() }
     setData((d) => ({ ...d, customers: [...d.customers, saved] }))
-    push((url) => remote.saveCustomer(url, saved))
+    push((url, auth) => remote.saveCustomer(url, auth, saved))
     return saved
   }, [])
 
@@ -157,12 +224,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       customers: d.customers.map((x) => (x.id === c.id ? c : x)),
     }))
-    push((url) => remote.saveCustomer(url, c))
+    push((url, auth) => remote.saveCustomer(url, auth, c))
   }, [])
 
   const deleteCustomer = useCallback((id: string) => {
     setData((d) => ({ ...d, customers: d.customers.filter((c) => c.id !== id) }))
-    push((url) => remote.deleteCustomer(url, id))
+    push((url, auth) => remote.deleteCustomer(url, auth, id))
   }, [])
 
   const getIssuer = useCallback(
@@ -210,6 +277,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncEnabled,
       gasUrl,
       setGasUrl,
+      session,
+      needsLogin,
+      login,
+      logout: doLogout,
       getInvoice,
       addInvoice,
       updateInvoice,
@@ -230,6 +301,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncEnabled,
       gasUrl,
       setGasUrl,
+      session,
+      needsLogin,
+      login,
+      doLogout,
       getInvoice,
       addInvoice,
       updateInvoice,

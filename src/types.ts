@@ -32,6 +32,18 @@ export const STATUS_LABELS: Record<InvoiceStatus, string> = {
   overdue: '延滞',
 }
 
+/** 権限ロール */
+export type UserRole = 'owner' | 'restricted'
+
+/** ログイン中のユーザー（セッション） */
+export interface Session {
+  email: string
+  name: string
+  role: UserRole
+  /** GAS へのリクエスト認証に用いる（内部利用） */
+  pin: string
+}
+
 /** 顧客（請求先） */
 export interface Customer {
   id: string
@@ -40,6 +52,8 @@ export interface Customer {
   email: string
   address: string
   phone: string
+  /** 作成者メール（GASが付与。閲覧制御に使用） */
+  creator?: string
 }
 
 /** 明細行 */
@@ -110,6 +124,8 @@ export interface Invoice {
   notes: string
   createdAt: string
   updatedAt: string
+  /** 作成者メール（GASが付与。閲覧制御に使用） */
+  creator?: string
 }
 
 /** アプリ全体の永続化データ */

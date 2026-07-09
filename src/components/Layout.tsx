@@ -2,14 +2,16 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 
 const NAV = [
-  { to: '/', label: 'ダッシュボード', icon: '📊', end: true },
-  { to: '/invoices', label: '請求書', icon: '📄', end: false },
-  { to: '/customers', label: '顧客一覧', icon: '👥', end: false },
-  { to: '/settings', label: '請求者管理', icon: '⚙️', end: false },
+  { to: '/', label: 'ダッシュボード', icon: '📊', end: true, ownerOnly: false },
+  { to: '/invoices', label: '請求書', icon: '📄', end: false, ownerOnly: false },
+  { to: '/customers', label: '顧客一覧', icon: '👥', end: false, ownerOnly: false },
+  { to: '/settings', label: '設定', icon: '⚙️', end: false, ownerOnly: true },
 ]
 
 export default function Layout() {
-  const { syncEnabled } = useApp()
+  const { syncEnabled, session, logout } = useApp()
+  const isOwner = !session || session.role === 'owner'
+  const nav = NAV.filter((item) => !item.ownerOnly || isOwner)
   return (
     <div className="min-h-screen">
       {/* サイドバー */}
@@ -24,7 +26,7 @@ export default function Layout() {
           </div>
         </div>
         <nav className="space-y-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -43,8 +45,28 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* データ保存先ステータス */}
-        <div className="mt-auto px-2 pt-6">
+        {/* ユーザー・保存先ステータス */}
+        <div className="mt-auto space-y-2 px-2 pt-6">
+          {session && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-slate-700">
+                    {session.name || session.email}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {session.role === 'owner' ? 'オーナー（全データ）' : '制限（自分のみ）'}
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-50"
+                >
+                  ログアウト
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs">
             <span
               className={`h-2 w-2 rounded-full ${
