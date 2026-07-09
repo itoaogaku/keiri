@@ -1,0 +1,22 @@
+# Keiri（SPA）用の Apache 設定
+# /invoices/new などへ直接アクセス・リロードしても index.html を返す。
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 実在するファイル・ディレクトリ（assets 等）はそのまま配信
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # それ以外はすべて index.html（クライアント側ルーティングに委ねる）
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# 静的アセットのキャッシュ（任意）
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 month"
+</IfModule>
