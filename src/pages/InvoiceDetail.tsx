@@ -2,7 +2,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 import { computeTotals, lineNet } from '../lib/calc'
 import { yen, jpDate } from '../lib/format'
-import { TAX_RATE_LABELS, type IssuerProfile } from '../types'
+import {
+  STATUS_LABELS,
+  TAX_RATE_LABELS,
+  type InvoiceStatus,
+  type IssuerProfile,
+} from '../types'
 import StatusBadge from '../components/StatusBadge'
 
 /** 振込先を1行ずつの表示用テキストに整形する（構造化 → 行配列） */
@@ -24,7 +29,7 @@ function bankLines(issuer: IssuerProfile): string[] {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getInvoice, getCustomer, getIssuer } = useApp()
+  const { getInvoice, getCustomer, getIssuer, updateInvoice } = useApp()
 
   const inv = id ? getInvoice(id) : undefined
   if (!inv) {
@@ -50,9 +55,27 @@ export default function InvoiceDetail() {
     <div>
       {/* 操作バー（印刷時は非表示） */}
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Link to="/invoices" className="text-sm text-slate-500 hover:underline">
-          ← 一覧へ戻る
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/invoices" className="text-sm text-slate-500 hover:underline">
+            ← 一覧へ戻る
+          </Link>
+          <label className="flex items-center gap-2 text-sm text-slate-500">
+            ステータス
+            <select
+              value={inv.status}
+              onChange={(e) =>
+                updateInvoice({ ...inv, status: e.target.value as InvoiceStatus })
+              }
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              {Object.entries(STATUS_LABELS).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => navigate(`/invoices/new?copyFrom=${inv.id}`)}
