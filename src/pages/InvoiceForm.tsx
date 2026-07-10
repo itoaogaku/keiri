@@ -380,7 +380,7 @@ export default function InvoiceForm() {
               )}
               {totals.inclTotal > 0 && (
                 <div className="flex justify-between text-slate-500">
-                  <span>税込入力ぶん</span>
+                  <span>税込入力分</span>
                   <span>{yen(totals.inclTotal)}</span>
                 </div>
               )}

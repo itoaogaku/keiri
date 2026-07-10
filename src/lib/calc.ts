@@ -14,7 +14,7 @@ export interface TaxBreakdown {
   subtotal: number
   /** 消費税合計 */
   taxTotal: number
-  /** 税込入力ぶんの合計（消費税を加算しない） */
+  /** 税込入力分の合計（消費税を加算しない） */
   inclTotal: number
   /** 総合計 */
   total: number
