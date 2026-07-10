@@ -264,18 +264,6 @@ export default function InvoiceDetail() {
                 <span>{yen(t.inclTotal)}</span>
               </div>
             )}
-            {t.reimbursementTotal > 0 && (
-              <>
-                <div className="flex justify-between border-t border-slate-200 pt-1.5 text-slate-600">
-                  <span>立替金を除く請求額</span>
-                  <span>{yen(t.revenue)}</span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>立替金</span>
-                  <span>{yen(t.reimbursementTotal)}</span>
-                </div>
-              </>
-            )}
             <div className="flex justify-between border-t-2 border-slate-300 pt-2 text-lg font-bold text-slate-800">
               <span>合計</span>
               <span>{yen(t.total)}</span>
