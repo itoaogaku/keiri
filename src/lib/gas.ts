@@ -1,4 +1,4 @@
-import type { Customer, Invoice, UserRole } from '../types'
+import type { Customer, Invoice, IssuerProfile, UserRole } from '../types'
 
 // Google Apps Script（スプレッドシートに貼るスクリプト）と通信する薄いクライアント。
 // サーバー不要・鍵不要。GAS のウェブアプリ URL を設定すると同期が有効になる。
@@ -72,6 +72,8 @@ interface StateResult {
   error?: string
   customers?: unknown[]
   invoices?: unknown[]
+  issuers?: IssuerProfile[]
+  businessTypes?: string[]
 }
 
 // ---- 型の正規化 ----
@@ -140,17 +142,47 @@ function normInvoice(inv: Record<string, unknown>): Invoice {
   }
 }
 
-/** 認証付きで、権限に応じたデータを取得 */
+/** 認証付きで、権限に応じたデータ＋共有設定を取得 */
 export async function fetchState(
   url: string,
   auth: Auth
-): Promise<{ customers: Customer[]; invoices: Invoice[] }> {
+): Promise<{
+  customers: Customer[]
+  invoices: Invoice[]
+  issuers: IssuerProfile[]
+  businessTypes: string[]
+}> {
   const res = await post<StateResult>(url, { action: 'state', auth })
   if (res.ok === false) throw new Error(res.error || 'state failed')
   return {
     customers: (res.customers ?? []).map((c) => normCustomer(c as Record<string, unknown>)),
     invoices: (res.invoices ?? []).map((i) => normInvoice(i as Record<string, unknown>)),
+    issuers: Array.isArray(res.issuers) ? res.issuers : [],
+    businessTypes: Array.isArray(res.businessTypes) ? res.businessTypes : [],
   }
+}
+
+/** 共有設定（請求者・事業種別）を保存（オーナーのみ・GASで検証） */
+export async function saveConfig(
+  url: string,
+  auth: Auth,
+  config: { issuers: IssuerProfile[]; businessTypes: string[] }
+): Promise<unknown> {
+  return post(url, { action: 'saveConfig', auth, config })
+}
+
+/** 全請求書を対象に、指定日の次の請求書番号を採番 */
+export async function nextInvoiceNumber(
+  url: string,
+  auth: Auth,
+  datePart: string
+): Promise<string | null> {
+  const res = await post<{ ok?: boolean; invoiceNumber?: string }>(url, {
+    action: 'nextInvoiceNumber',
+    auth,
+    datePart,
+  })
+  return res.invoiceNumber ?? null
 }
 
 export const remote = {

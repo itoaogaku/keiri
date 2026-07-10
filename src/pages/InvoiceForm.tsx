@@ -40,7 +40,9 @@ export default function InvoiceForm() {
   const [searchParams] = useSearchParams()
   const copyFromId = searchParams.get('copyFrom')
   const navigate = useNavigate()
-  const { data, getInvoice, addInvoice, updateInvoice, addBusinessType } = useApp()
+  const { data, session, getInvoice, addInvoice, updateInvoice, addBusinessType, fetchNextInvoiceNumber } =
+    useApp()
+  const isOwner = !session || session.role === 'owner'
 
   const isEdit = Boolean(id)
 
@@ -71,6 +73,19 @@ export default function InvoiceForm() {
       return () => clearTimeout(t)
     }
   }, [copiedNotice])
+
+  // 新規作成時は、全員の請求を対象にした「次の請求書番号」をGASから取得して反映する
+  useEffect(() => {
+    if (isEdit) return
+    let cancelled = false
+    fetchNextInvoiceNumber().then((num) => {
+      if (!cancelled && num) setForm((f) => ({ ...f, invoiceNumber: num }))
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 集計は選択中の請求者の課税区分（課税/非課税）に従う
   const totals = computeTotals(form.items, form.issuer.taxMode)
@@ -269,13 +284,15 @@ export default function InvoiceForm() {
                     <option value={form.businessType}>{form.businessType}</option>
                   )}
                 </select>
-                <button
-                  type="button"
-                  onClick={addAndSelectBusinessType}
-                  className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  ＋追加
-                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={addAndSelectBusinessType}
+                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    ＋追加
+                  </button>
+                )}
               </div>
             </div>
           </div>

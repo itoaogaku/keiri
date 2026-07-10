@@ -16,9 +16,12 @@ import {
   setGasUrl as persistGasUrl,
   fetchState,
   login as gasLogin,
+  saveConfig as gasSaveConfig,
+  nextInvoiceNumber as gasNextInvoiceNumber,
   remote,
   type Auth,
 } from '../lib/gas'
+import { compactDate } from '../lib/format'
 
 const SESSION_KEY = 'keiri.session'
 
@@ -63,6 +66,8 @@ interface AppContextValue {
   // 事業種別
   addBusinessType: (name: string) => void
   removeBusinessType: (name: string) => void
+  // 全請求書を対象にした次番号の採番（同期時のみ。未同期は null）
+  fetchNextInvoiceNumber: (base?: Date) => Promise<string | null>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -117,12 +122,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           pin: session.pin,
         })
         if (cancelled) return
+        // 共有設定（請求者・事業種別）はリモート優先。未初期化ならローカルを採用
+        const localIssuers = dataRef.current.issuers
+        const localBiz = dataRef.current.businessTypes
+        const issuers = remoteState.issuers.length ? remoteState.issuers : localIssuers
+        const businessTypes = remoteState.businessTypes.length
+          ? remoteState.businessTypes
+          : localBiz
         setData((d) => ({
           ...d,
           customers: remoteState.customers,
           invoices: remoteState.invoices,
+          issuers,
+          businessTypes,
         }))
         setSyncEnabled(true)
+        // リモート未初期化かつオーナーなら、ローカル設定で初期化する
+        if (
+          session.role === 'owner' &&
+          (!remoteState.issuers.length || !remoteState.businessTypes.length)
+        ) {
+          pushConfig(issuers, businessTypes)
+        }
       } catch (e) {
         if (cancelled) return
         setSyncEnabled(false)
@@ -173,6 +194,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.warn('[keiri] スプレッドシート同期に失敗しました', e)
     )
   }
+
+  // 共有設定（請求者・事業種別）をスプレッドシートへ保存（オーナーのみ有効）
+  const pushConfig = (issuers: IssuerProfile[], businessTypes: string[]) => {
+    push((url, auth) => gasSaveConfig(url, auth, { issuers, businessTypes }))
+  }
+
+  // 全請求書を対象に次の請求書番号を採番（同期時のみ）
+  const fetchNextInvoiceNumber = useCallback(
+    async (base: Date = new Date()): Promise<string | null> => {
+      const url = gasRef.current
+      const s = sessionRef.current
+      if (!url || !s) return null
+      try {
+        return await gasNextInvoiceNumber(
+          url,
+          { email: s.email, pin: s.pin },
+          compactDate(base)
+        )
+      } catch {
+        return null
+      }
+    },
+    []
+  )
 
   const customerName = (customerId: string) =>
     dataRef.current.customers.find((c) => c.id === customerId)?.companyName ?? ''
@@ -239,36 +284,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addIssuer = useCallback((i: Omit<IssuerProfile, 'id'>): IssuerProfile => {
     const saved: IssuerProfile = { ...i, id: newId() }
-    setData((d) => ({ ...d, issuers: [...d.issuers, saved] }))
+    const issuers = [...dataRef.current.issuers, saved]
+    setData((d) => ({ ...d, issuers }))
+    pushConfig(issuers, dataRef.current.businessTypes)
     return saved
   }, [])
 
   const updateIssuer = useCallback((issuer: IssuerProfile) => {
-    setData((d) => ({
-      ...d,
-      issuers: d.issuers.map((x) => (x.id === issuer.id ? issuer : x)),
-    }))
+    const issuers = dataRef.current.issuers.map((x) => (x.id === issuer.id ? issuer : x))
+    setData((d) => ({ ...d, issuers }))
+    pushConfig(issuers, dataRef.current.businessTypes)
   }, [])
 
   const deleteIssuer = useCallback((id: string) => {
-    setData((d) => ({ ...d, issuers: d.issuers.filter((i) => i.id !== id) }))
+    const issuers = dataRef.current.issuers.filter((i) => i.id !== id)
+    setData((d) => ({ ...d, issuers }))
+    pushConfig(issuers, dataRef.current.businessTypes)
   }, [])
 
   const addBusinessType = useCallback((name: string) => {
     const trimmed = name.trim()
-    if (!trimmed) return
-    setData((d) =>
-      d.businessTypes.includes(trimmed)
-        ? d
-        : { ...d, businessTypes: [...d.businessTypes, trimmed] }
-    )
+    if (!trimmed || dataRef.current.businessTypes.includes(trimmed)) return
+    const businessTypes = [...dataRef.current.businessTypes, trimmed]
+    setData((d) => ({ ...d, businessTypes }))
+    pushConfig(dataRef.current.issuers, businessTypes)
   }, [])
 
   const removeBusinessType = useCallback((name: string) => {
-    setData((d) => ({
-      ...d,
-      businessTypes: d.businessTypes.filter((b) => b !== name),
-    }))
+    const businessTypes = dataRef.current.businessTypes.filter((b) => b !== name)
+    setData((d) => ({ ...d, businessTypes }))
+    pushConfig(dataRef.current.issuers, businessTypes)
   }, [])
 
   const value = useMemo<AppContextValue>(
@@ -295,6 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteIssuer,
       addBusinessType,
       removeBusinessType,
+      fetchNextInvoiceNumber,
     }),
     [
       data,
@@ -319,6 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteIssuer,
       addBusinessType,
       removeBusinessType,
+      fetchNextInvoiceNumber,
     ]
   )
 

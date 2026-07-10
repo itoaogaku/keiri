@@ -29,6 +29,11 @@ const INVOICE_HEADERS = [
 ]
 const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
+// 共有設定（請求者プロファイル・事業種別）を保存するシート。
+// 角印画像などで大きくなるため JSON を分割して1列に格納する。
+const CONFIG_SHEET = '設定'
+const CONFIG_CHUNK = 45000
+
 // 請求者ごとの売上シート
 const ISSUER_SHEET_PREFIX = '売上_'
 const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '立替金以外', '立替金', '合計', '備考']
@@ -90,6 +95,52 @@ function authenticate(email, pin) {
   return null
 }
 
+// ================= 共有設定（請求者・事業種別） =================
+
+function readConfig() {
+  const sh = ss().getSheetByName(CONFIG_SHEET)
+  if (!sh) return { issuers: [], businessTypes: [] }
+  const last = sh.getLastRow()
+  if (last < 1) return { issuers: [], businessTypes: [] }
+  const cells = sh.getRange(1, 1, last, 1).getValues()
+  const json = cells.map(function (r) { return r[0] }).join('')
+  try {
+    const c = JSON.parse(json)
+    return { issuers: c.issuers || [], businessTypes: c.businessTypes || [] }
+  } catch (e) {
+    return { issuers: [], businessTypes: [] }
+  }
+}
+
+function writeConfig(config) {
+  const book = ss()
+  let sh = book.getSheetByName(CONFIG_SHEET)
+  if (!sh) sh = book.insertSheet(CONFIG_SHEET)
+  sh.clearContents()
+  const json = JSON.stringify({
+    issuers: (config && config.issuers) || [],
+    businessTypes: (config && config.businessTypes) || [],
+  })
+  const chunks = []
+  for (let i = 0; i < json.length; i += CONFIG_CHUNK) chunks.push([json.slice(i, i + CONFIG_CHUNK)])
+  if (chunks.length === 0) chunks.push([''])
+  sh.getRange(1, 1, chunks.length, 1).setValues(chunks)
+}
+
+/** 全請求書を対象に、指定日(YYYYMMDD)の次の請求書番号を採番する */
+function nextInvoiceNumber(datePart) {
+  const rows = readAll(getSheet(INVOICES, INVOICE_HEADERS))
+  let max = 0
+  rows.forEach(function (r) {
+    const num = String(r[1])
+    if (/^\d{10}$/.test(num) && num.slice(0, 8) === datePart) {
+      const seq = parseInt(num.slice(8), 10)
+      if (!isNaN(seq) && seq > max) max = seq
+    }
+  })
+  return datePart + String(max + 1).padStart(2, '0')
+}
+
 // ================= HTTP ハンドラ =================
 
 function doGet() {
@@ -116,6 +167,12 @@ function doPost(e) {
     switch (action) {
       case 'state':
         return jsonOut(getStateFor(user))
+      case 'nextInvoiceNumber':
+        return jsonOut({ ok: true, invoiceNumber: nextInvoiceNumber(String(body.datePart)) })
+      case 'saveConfig':
+        if (!user.isOwner) return jsonOut({ ok: false, error: 'forbidden' })
+        writeConfig(body.config)
+        return jsonOut({ ok: true })
       case 'upsertCustomer':
         upsertCustomer(user, body.customer)
         return jsonOut({ ok: true })
@@ -305,7 +362,14 @@ function getStateFor(user) {
   invoices.sort(function (a, b) {
     return String(b.createdAt).localeCompare(String(a.createdAt))
   })
-  return { ok: true, customers: customers, invoices: invoices }
+  const config = readConfig()
+  return {
+    ok: true,
+    customers: customers,
+    invoices: invoices,
+    issuers: config.issuers,
+    businessTypes: config.businessTypes,
+  }
 }
 
 // ================= 請求者ごとの売上シート =================
