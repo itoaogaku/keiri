@@ -1,5 +1,4 @@
-import type { AppData, Customer, Invoice, IssuerProfile } from '../types'
-import { newId } from './invoice'
+import type { AppData, IssuerProfile } from '../types'
 
 const STORAGE_KEY = 'keiri.appdata.v2'
 
@@ -41,77 +40,15 @@ export const DEFAULT_ISSUERS: IssuerProfile[] = [
   makeIssuer('issuer-aogaku-tf', '青山学院大学陸上競技部', 'taxable'),
 ]
 
-/** 初回起動時のデモデータ */
+/**
+ * 初期データ。顧客・請求書は空（サンプルは入れない）。
+ * 実データはログイン後にスプレッドシートから取得する。
+ * 請求者プロファイルと事業種別は設定として初期値を持たせる。
+ */
 function seedData(): AppData {
-  const customers: Customer[] = [
-    {
-      id: newId(),
-      companyName: '株式会社ABC工業',
-      contactName: '田中 太郎',
-      email: 'tanaka@abc.example.com',
-      address: '大阪府大阪市北区梅田2-2-2',
-      phone: '06-1111-2222',
-    },
-    {
-      id: newId(),
-      companyName: 'グローバルテック株式会社',
-      contactName: '佐藤 花子',
-      email: 'sato@globaltech.example.com',
-      address: '神奈川県横浜市西区みなとみらい3-3-3',
-      phone: '045-3333-4444',
-    },
-  ]
-
-  const now = new Date()
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  const compact = iso(now).replace(/-/g, '')
-  const dueEnd = iso(new Date(now.getFullYear(), now.getMonth() + 2, 0)) // 翌月末
-  const taxableIssuer = DEFAULT_ISSUERS[0]
-  const exemptIssuer = DEFAULT_ISSUERS[1]
-
-  const invoices: Invoice[] = [
-    {
-      id: newId(),
-      invoiceNumber: `${compact}01`,
-      issueDate: iso(now),
-      dueDate: dueEnd,
-      status: 'issued',
-      customerId: customers[0].id,
-      businessType: 'コンサルティング',
-      honorific: '御中',
-      issuerId: taxableIssuer.id,
-      issuer: { ...taxableIssuer },
-      items: [
-        { id: newId(), name: 'Webサイト制作費', quantity: 1, unitPrice: 300000, taxRate: 10 },
-        { id: newId(), name: '保守サポート（月額）', quantity: 3, unitPrice: 20000, taxRate: 10 },
-      ],
-      notes: '毎度お世話になっております。',
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    },
-    {
-      id: newId(),
-      invoiceNumber: `${compact}02`,
-      issueDate: iso(now),
-      dueDate: dueEnd,
-      status: 'paid',
-      customerId: customers[1].id,
-      businessType: 'その他',
-      honorific: '御中',
-      issuerId: exemptIssuer.id,
-      issuer: { ...exemptIssuer },
-      items: [
-        { id: newId(), name: '講演料（非課税）', quantity: 1, unitPrice: 150000, taxRate: 10 },
-      ],
-      notes: '',
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    },
-  ]
-
   return {
-    customers,
-    invoices,
+    customers: [],
+    invoices: [],
     issuers: DEFAULT_ISSUERS,
     businessTypes: DEFAULT_BUSINESS_TYPES,
   }

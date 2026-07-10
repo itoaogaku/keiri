@@ -7,20 +7,38 @@ import type { Customer, Invoice, UserRole } from '../types'
 // URL の優先順位: Vercel の環境変数 VITE_GAS_URL > 画面で設定した値(localStorage)
 
 const LS_KEY = 'keiri.gasUrl'
+// 「ローカルに戻す」で明示的にローカル動作を選んだことを表す番兵値
+const LOCAL_SENTINEL = '__local__'
+
+// 本番ビルドの既定接続先（未設定でも社員がログイン必須になるように）。
+// ※このURLは PIN 認証で保護されており、URL 単体ではデータにアクセスできません。
+const DEFAULT_GAS_URL =
+  'https://script.google.com/macros/s/AKfycbxr04LIgvF-WcKUfh8L0dfKcIcN2e2RmuipCiecmmBDNIoaGQISyM3DG75O2EKXX2XQZA/exec'
 
 export interface Auth {
   email: string
   pin: string
 }
 
+/**
+ * 接続先URLの解決順:
+ *   1) 明示的にローカル指定(__local__) → ''（ローカル動作）
+ *   2) ユーザーが画面で保存したURL(localStorage)
+ *   3) ビルド時の環境変数 VITE_GAS_URL
+ *   4) 本番ビルドの既定URL（開発時は空）
+ */
 export function getGasUrl(): string {
+  const stored = localStorage.getItem(LS_KEY)
+  if (stored === LOCAL_SENTINEL) return ''
+  if (stored) return stored
   const env = import.meta.env.VITE_GAS_URL
   if (env) return env
-  return localStorage.getItem(LS_KEY) || ''
+  return import.meta.env.PROD ? DEFAULT_GAS_URL : ''
 }
 
 export function setGasUrl(url: string): void {
-  localStorage.setItem(LS_KEY, url.trim())
+  // 空文字＝ローカルに戻す。番兵値で保存し、既定URLへ再フォールバックしないようにする
+  localStorage.setItem(LS_KEY, url.trim() || LOCAL_SENTINEL)
 }
 
 // POST は Content-Type を text/plain にして CORS プリフライトを避ける（GAS の定石）。
