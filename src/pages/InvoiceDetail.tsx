@@ -181,12 +181,18 @@ export default function InvoiceDetail() {
             </div>
           </div>
           <div className="relative text-sm text-slate-600">
-            {/* 角印（背景透過画像を社名・住所付近に重ねて表示） */}
+            {/* 角印。mix-blend-mode: multiply で白背景を紙に溶け込ませ、
+                白背景の印鑑画像でも透過されているように見せる */}
             {seal && (
               <img
                 src={seal}
                 alt="角印"
                 className="pointer-events-none absolute right-0 top-2 h-20 w-20 object-contain"
+                style={{
+                  mixBlendMode: 'multiply',
+                  WebkitPrintColorAdjust: 'exact',
+                  printColorAdjust: 'exact',
+                }}
               />
             )}
             <div className="font-semibold text-slate-800">{inv.issuer.name}</div>
