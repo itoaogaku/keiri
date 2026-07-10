@@ -124,7 +124,10 @@ function writeConfig(config) {
   const chunks = []
   for (let i = 0; i < json.length; i += CONFIG_CHUNK) chunks.push([json.slice(i, i + CONFIG_CHUNK)])
   if (chunks.length === 0) chunks.push([''])
-  sh.getRange(1, 1, chunks.length, 1).setValues(chunks)
+  const range = sh.getRange(1, 1, chunks.length, 1)
+  // セルを文字列固定にして、base64が数式/数値/日付に化けるのを防ぐ
+  range.setNumberFormat('@')
+  range.setValues(chunks)
 }
 
 /** 全請求書を対象に、指定日(YYYYMMDD)の次の請求書番号を採番する */

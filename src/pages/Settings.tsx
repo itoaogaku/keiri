@@ -176,8 +176,38 @@ export default function Settings() {
       return
     }
     const reader = new FileReader()
-    reader.onload = () =>
-      setDraft((d) => ({ ...d, sealImage: String(reader.result) }))
+    reader.onload = () => {
+      const url = String(reader.result)
+      // 透過（アルファ）を持つか判定し、無ければ警告する
+      const img = new Image()
+      img.onload = () => {
+        let hasAlpha = false
+        try {
+          const c = document.createElement('canvas')
+          c.width = img.naturalWidth
+          c.height = img.naturalHeight
+          const ctx = c.getContext('2d')!
+          ctx.drawImage(img, 0, 0)
+          const d = ctx.getImageData(0, 0, c.width, c.height).data
+          for (let i = 3; i < d.length; i += 4) {
+            if (d[i] < 250) {
+              hasAlpha = true
+              break
+            }
+          }
+        } catch {
+          hasAlpha = true
+        }
+        setDraft((dd) => ({ ...dd, sealImage: url }))
+        if (!hasAlpha) {
+          alert(
+            'この画像は背景が透過されていません。\n背景が透明なPNG画像をご利用ください（JPEGは透過できません）。'
+          )
+        }
+      }
+      img.onerror = () => setDraft((dd) => ({ ...dd, sealImage: url }))
+      img.src = url
+    }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
@@ -336,14 +366,21 @@ export default function Settings() {
                     <img
                       src={draft.sealImage}
                       alt="角印プレビュー"
+                      title="市松模様が透けて見えれば背景は透過されています"
                       className="h-16 w-16 rounded border border-slate-200 object-contain p-1"
+                      style={{
+                        backgroundImage:
+                          'linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%),linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%)',
+                        backgroundSize: '12px 12px',
+                        backgroundPosition: '0 0,6px 6px',
+                      }}
                     />
                   )}
                   <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                     画像を選択
                     <input
                       type="file"
-                      accept="image/png,image/jpeg,image/webp"
+                      accept="image/png,image/webp"
                       className="hidden"
                       onChange={handleSealFile}
                     />
