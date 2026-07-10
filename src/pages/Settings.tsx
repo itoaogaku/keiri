@@ -2,6 +2,60 @@ import { useState } from 'react'
 import { useApp } from '../store/AppContext'
 import { TAX_MODE_LABELS, type IssuerProfile, type TaxMode } from '../types'
 
+/**
+ * 画像の四隅の色を背景色とみなし、その色に近い部分を透明にする。
+ * 白でも薄いグレー等でも対応。四隅が暗い場合は加工しない（印影を守る）。
+ */
+function knockoutBackground(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth
+        c.height = img.naturalHeight
+        const ctx = c.getContext('2d')!
+        ctx.drawImage(img, 0, 0)
+        const w = c.width
+        const h = c.height
+        const id = ctx.getImageData(0, 0, w, h)
+        const d = id.data
+        const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4]
+        let cr = 0
+        let cg = 0
+        let cb = 0
+        corners.forEach((k) => {
+          cr += d[k]
+          cg += d[k + 1]
+          cb += d[k + 2]
+        })
+        cr /= 4
+        cg /= 4
+        cb /= 4
+        // 背景（四隅）が明るくないなら加工しない
+        if (Math.min(cr, cg, cb) < 170) {
+          resolve(dataUrl)
+          return
+        }
+        for (let i = 0; i < d.length; i += 4) {
+          const dist = Math.sqrt(
+            (d[i] - cr) ** 2 + (d[i + 1] - cg) ** 2 + (d[i + 2] - cb) ** 2
+          )
+          if (dist < 45) d[i + 3] = 0
+          else if (dist < 90)
+            d[i + 3] = Math.min(d[i + 3], Math.round(((dist - 45) / 45) * 255))
+        }
+        ctx.putImageData(id, 0, 0)
+        resolve(c.toDataURL('image/png'))
+      } catch {
+        resolve(dataUrl)
+      }
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
 function SheetConnection() {
   const { gasUrl, setGasUrl, syncEnabled } = useApp()
   const [value, setValue] = useState(gasUrl)
@@ -176,69 +230,21 @@ export default function Settings() {
       return
     }
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const url = String(reader.result)
-      // 透過（アルファ）を持つか判定し、無ければ警告する
-      const img = new Image()
-      img.onload = () => {
-        // 四隅の不透明度で背景が透過されているか判定する
-        let bgTransparent = true
-        try {
-          const c = document.createElement('canvas')
-          c.width = img.naturalWidth
-          c.height = img.naturalHeight
-          const ctx = c.getContext('2d')!
-          ctx.drawImage(img, 0, 0)
-          const corners: [number, number][] = [
-            [0, 0],
-            [c.width - 1, 0],
-            [0, c.height - 1],
-            [c.width - 1, c.height - 1],
-          ]
-          const opaque = corners.filter(([x, y]) => ctx.getImageData(x, y, 1, 1).data[3] > 250)
-          bgTransparent = opaque.length < 4
-        } catch {
-          bgTransparent = true
-        }
-        setDraft((dd) => ({ ...dd, sealImage: url }))
-        if (!bgTransparent) {
-          alert(
-            'この画像は背景が透過されていません。\n下の「白背景を透明にする」を押すか、背景が透明なPNGをご利用ください。'
-          )
-        }
-      }
-      img.onerror = () => setDraft((dd) => ({ ...dd, sealImage: url }))
-      img.src = url
+      // アップロード時に背景を自動で透明化する
+      const out = await knockoutBackground(url)
+      setDraft((dd) => ({ ...dd, sealImage: out }))
     }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
 
-  // 白（近白）背景を透明化する。印影の色は残す
-  const removeWhiteBg = () => {
+  // 既存画像の背景を透明化する（ボタン用）
+  const removeWhiteBg = async () => {
     if (!draft.sealImage) return
-    const img = new Image()
-    img.onload = () => {
-      const c = document.createElement('canvas')
-      c.width = img.naturalWidth
-      c.height = img.naturalHeight
-      const ctx = c.getContext('2d')!
-      ctx.drawImage(img, 0, 0)
-      const imageData = ctx.getImageData(0, 0, c.width, c.height)
-      const d = imageData.data
-      for (let i = 0; i < d.length; i += 4) {
-        const min = Math.min(d[i], d[i + 1], d[i + 2])
-        if (min > 232) {
-          d[i + 3] = 0 // 近白 → 完全透明
-        } else if (min > 200) {
-          // 境界を滑らかに（白いほど透明）
-          d[i + 3] = Math.min(d[i + 3], Math.round(((232 - min) / 32) * 255))
-        }
-      }
-      ctx.putImageData(imageData, 0, 0)
-      setDraft((dd) => ({ ...dd, sealImage: c.toDataURL('image/png') }))
-    }
-    img.src = draft.sealImage
+    const out = await knockoutBackground(draft.sealImage)
+    setDraft((dd) => ({ ...dd, sealImage: out }))
   }
 
   return (
@@ -419,7 +425,7 @@ export default function Settings() {
                       onClick={removeWhiteBg}
                       className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
                     >
-                      白背景を透明にする
+                      背景を透明にする
                     </button>
                   )}
                   {draft.sealImage && (
