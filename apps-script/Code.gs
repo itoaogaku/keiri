@@ -212,8 +212,13 @@ function writeWithGuard(user, sh, id, baseRow, creatorIdx) {
   }
   const row = baseRow.slice()
   row[creatorIdx] = creator
-  if (r === -1) sh.appendRow(row)
-  else sh.getRange(r, 1, 1, row.length).setValues([row])
+  if (r === -1) {
+    // 新規はヘッダ直下（2行目）に挿入し、最新が上に来るようにする
+    sh.insertRowBefore(2)
+    sh.getRange(2, 1, 1, row.length).setValues([row])
+  } else {
+    sh.getRange(r, 1, 1, row.length).setValues([row])
+  }
 }
 
 function deleteEntity(user, sheetName, headers, creatorIdx, id) {
@@ -359,7 +364,7 @@ function rebuildIssuerSheets() {
     sh.clearContents()
 
     const list = groups[issuer].sort(function (a, b) {
-      return String(a.issueDate).localeCompare(String(b.issueDate))
+      return String(b.issueDate).localeCompare(String(a.issueDate)) // 新しい発行日が上
     })
     const out = [ISSUER_VIEW_HEADERS]
     let sumRev = 0
