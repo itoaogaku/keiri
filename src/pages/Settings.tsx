@@ -181,27 +181,29 @@ export default function Settings() {
       // 透過（アルファ）を持つか判定し、無ければ警告する
       const img = new Image()
       img.onload = () => {
-        let hasAlpha = false
+        // 四隅の不透明度で背景が透過されているか判定する
+        let bgTransparent = true
         try {
           const c = document.createElement('canvas')
           c.width = img.naturalWidth
           c.height = img.naturalHeight
           const ctx = c.getContext('2d')!
           ctx.drawImage(img, 0, 0)
-          const d = ctx.getImageData(0, 0, c.width, c.height).data
-          for (let i = 3; i < d.length; i += 4) {
-            if (d[i] < 250) {
-              hasAlpha = true
-              break
-            }
-          }
+          const corners: [number, number][] = [
+            [0, 0],
+            [c.width - 1, 0],
+            [0, c.height - 1],
+            [c.width - 1, c.height - 1],
+          ]
+          const opaque = corners.filter(([x, y]) => ctx.getImageData(x, y, 1, 1).data[3] > 250)
+          bgTransparent = opaque.length < 4
         } catch {
-          hasAlpha = true
+          bgTransparent = true
         }
         setDraft((dd) => ({ ...dd, sealImage: url }))
-        if (!hasAlpha) {
+        if (!bgTransparent) {
           alert(
-            'この画像は背景が透過されていません。\n背景が透明なPNG画像をご利用ください（JPEGは透過できません）。'
+            'この画像は背景が透過されていません。\n下の「白背景を透明にする」を押すか、背景が透明なPNGをご利用ください。'
           )
         }
       }
@@ -210,6 +212,33 @@ export default function Settings() {
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // 白（近白）背景を透明化する。印影の色は残す
+  const removeWhiteBg = () => {
+    if (!draft.sealImage) return
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, c.width, c.height)
+      const d = imageData.data
+      for (let i = 0; i < d.length; i += 4) {
+        const min = Math.min(d[i], d[i + 1], d[i + 2])
+        if (min > 232) {
+          d[i + 3] = 0 // 近白 → 完全透明
+        } else if (min > 200) {
+          // 境界を滑らかに（白いほど透明）
+          d[i + 3] = Math.min(d[i + 3], Math.round(((232 - min) / 32) * 255))
+        }
+      }
+      ctx.putImageData(imageData, 0, 0)
+      setDraft((dd) => ({ ...dd, sealImage: c.toDataURL('image/png') }))
+    }
+    img.src = draft.sealImage
   }
 
   return (
@@ -385,6 +414,14 @@ export default function Settings() {
                       onChange={handleSealFile}
                     />
                   </label>
+                  {draft.sealImage && (
+                    <button
+                      onClick={removeWhiteBg}
+                      className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+                    >
+                      白背景を透明にする
+                    </button>
+                  )}
                   {draft.sealImage && (
                     <button
                       onClick={() => setDraft((d) => ({ ...d, sealImage: undefined }))}
