@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 import { computeTotals, lineNet } from '../lib/calc'
+import { knockoutBackground } from '../lib/image'
 import { yen, jpDate } from '../lib/format'
 import {
   STATUS_LABELS,
@@ -38,6 +40,25 @@ export default function InvoiceDetail() {
   const { data, getInvoice, getCustomer, getIssuer, updateInvoice } = useApp()
 
   const inv = id ? getInvoice(id) : undefined
+  // 角印は請求者プロファイル（最新）から参照する（請求書には保存していない）
+  const rawSeal = inv ? getIssuer(inv.issuerId)?.sealImage ?? inv.issuer.sealImage : undefined
+
+  // 表示直前に背景を除去する（保存内容によらず、常に背景透過で表示）
+  const [processedSeal, setProcessedSeal] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!rawSeal) {
+      setProcessedSeal(null)
+      return
+    }
+    knockoutBackground(rawSeal).then((out) => {
+      if (!cancelled) setProcessedSeal(out)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [rawSeal])
+
   if (!inv) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-500">
@@ -54,8 +75,7 @@ export default function InvoiceDetail() {
   const customer = getCustomer(inv.customerId)
   const t = computeTotals(inv.items, inv.issuer.taxMode)
   const exempt = inv.issuer.taxMode === 'exempt'
-  // 角印は請求者プロファイル（最新）から参照する（請求書には保存していない）
-  const seal = getIssuer(inv.issuerId)?.sealImage ?? inv.issuer.sealImage
+  const seal = processedSeal ?? rawSeal
 
   // PDF保存時の初期ファイル名を「請求書番号_請求先敬称」にする。
   // ブラウザは <title> を既定のファイル名に使うため、印刷直前だけ差し替える。
