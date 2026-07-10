@@ -207,7 +207,7 @@ export default function InvoiceDetail() {
               <img
                 src={seal}
                 alt="角印"
-                className="pointer-events-none absolute right-0 top-2 h-20 w-20 object-contain"
+                className="pointer-events-none absolute right-0 top-12 h-20 w-20 object-contain"
                 style={{
                   mixBlendMode: 'multiply',
                   WebkitPrintColorAdjust: 'exact',
@@ -216,7 +216,9 @@ export default function InvoiceDetail() {
               />
             )}
             <div className="font-semibold text-slate-800">{inv.issuer.name}</div>
-            {inv.issuer.address && <div className="pr-16">{inv.issuer.address}</div>}
+            {inv.issuer.address && (
+              <div className="whitespace-nowrap">{inv.issuer.address}</div>
+            )}
             {inv.issuer.tel && <div>TEL: {inv.issuer.tel}</div>}
             {inv.issuer.email && <div>{inv.issuer.email}</div>}
             {inv.issuer.registrationNumber && (
