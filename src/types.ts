@@ -63,6 +63,8 @@ export interface InvoiceItem {
   quantity: number
   unitPrice: number
   taxRate: TaxRate
+  /** 立替金かどうか（true の場合、消費税を加算せず収益から除外して集計） */
+  isReimbursement?: boolean
 }
 
 /**

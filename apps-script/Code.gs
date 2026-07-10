@@ -25,12 +25,13 @@ const INVOICE_HEADERS = [
   'id', '請求書番号', '発行日', '支払期限', 'ステータス', '請求者', '課税区分',
   '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
   '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称', '事業種別', '作成者',
+  '立替金以外', '立替金',
 ]
 const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
 // 請求者ごとの売上シート
 const ISSUER_SHEET_PREFIX = '売上_'
-const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '合計', '備考']
+const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', 'ステータス', '発行日', '立替金以外', '立替金', '合計', '備考']
 
 // 「作成者」列の位置（0始まり）
 const CUSTOMER_CREATOR_IDX = 6
@@ -141,9 +142,11 @@ function doPost(e) {
 function computeTotals(items, taxMode) {
   const net = { 8: 0, 10: 0 }
   let incl = 0
+  let reimb = 0
   ;(items || []).forEach(function (it) {
     const amount = Math.round((it.quantity || 0) * (it.unitPrice || 0))
-    if (Number(it.taxRate) === 0) incl += amount
+    if (it.isReimbursement) reimb += amount
+    else if (Number(it.taxRate) === 0) incl += amount
     else net[it.taxRate] += amount
   })
   const exempt = taxMode === 'exempt'
@@ -151,7 +154,12 @@ function computeTotals(items, taxMode) {
   const tax10 = exempt ? 0 : Math.floor(net[10] * 0.1)
   const subtotal = net[8] + net[10]
   const taxTotal = tax8 + tax10
-  return { subtotal: subtotal, taxTotal: taxTotal, total: subtotal + taxTotal + incl }
+  const revenue = subtotal + taxTotal + incl // 立替金以外
+  return {
+    subtotal: subtotal, taxTotal: taxTotal,
+    revenue: revenue, reimbursement: reimb,
+    total: revenue + reimb,
+  }
 }
 
 function safeParse(str, fallback) {
@@ -242,7 +250,9 @@ function upsertInvoice(user, inv, customerName) {
     inv.notes || '', inv.createdAt || '', inv.updatedAt || '',
     inv.honorific || '御中',
     inv.businessType || '',
-    '',
+    '', // 作成者（writeWithGuard が設定）
+    t.revenue, // 立替金以外
+    t.reimbursement, // 立替金
   ]
   writeWithGuard(user, sh, inv.id, base, INVOICE_CREATOR_IDX)
 }
@@ -312,15 +322,21 @@ function rebuildIssuerSheets() {
   invRows.forEach(function (r) {
     if (!r[0]) return
     const issuer = String(r[5] || '（未設定）')
+    // 明細から再計算（旧行でも立替金以外/立替金を正しく出す）
+    const items = safeParse(r[13], [])
+    const taxMode = (safeParse(r[14], {}) || {}).taxMode
+    const tt = computeTotals(items, taxMode)
     if (!groups[issuer]) groups[issuer] = []
     groups[issuer].push({
-      biz: r[19] || '',           // 事業種別
-      number: r[1] || '',         // 請求書番号
-      customer: r[8] || '',       // 顧客名
-      status: r[4] || '',         // ステータス
-      issueDate: r[2] || '',      // 発行日
-      total: Number(r[11]) || 0,  // 合計
-      notes: r[15] || '',         // 備考
+      biz: String(r[19] || ''),        // 事業種別
+      number: String(r[1] || ''),      // 請求書番号
+      customer: String(r[8] || ''),    // 顧客名
+      status: String(r[4] || ''),      // ステータス
+      issueDate: toYmd(r[2]),          // 発行日
+      revenue: tt.revenue,             // 立替金以外
+      reimb: tt.reimbursement,         // 立替金
+      total: tt.total,                 // 合計
+      notes: String(r[15] || ''),      // 備考
     })
   })
 
@@ -346,12 +362,16 @@ function rebuildIssuerSheets() {
       return String(a.issueDate).localeCompare(String(b.issueDate))
     })
     const out = [ISSUER_VIEW_HEADERS]
-    let sum = 0
+    let sumRev = 0
+    let sumReimb = 0
+    let sumTotal = 0
     list.forEach(function (x) {
-      out.push([x.biz, x.number, x.customer, x.status, x.issueDate, x.total, x.notes])
-      sum += x.total
+      out.push([x.biz, x.number, x.customer, x.status, x.issueDate, x.revenue, x.reimb, x.total, x.notes])
+      sumRev += x.revenue
+      sumReimb += x.reimb
+      sumTotal += x.total
     })
-    out.push(['', '', '', '', '合計', sum, ''])
+    out.push(['', '', '', '', '合計', sumRev, sumReimb, sumTotal, ''])
 
     sh.getRange(1, 1, out.length, ISSUER_VIEW_HEADERS.length).setValues(out)
   })

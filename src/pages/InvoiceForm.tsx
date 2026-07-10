@@ -19,6 +19,22 @@ import {
   type TaxRate,
 } from '../types'
 
+type ItemCategory = '10' | '8' | 'incl' | 'reimb'
+
+/** 明細の区分（税率／税込／立替金）を1つの値に集約 */
+function itemCategory(it: InvoiceItem): ItemCategory {
+  if (it.isReimbursement) return 'reimb'
+  if (it.taxRate === 0) return 'incl'
+  return String(it.taxRate) as '10' | '8'
+}
+
+/** 区分の選択値から taxRate と立替金フラグを決める */
+function categoryPatch(cat: ItemCategory): Partial<InvoiceItem> {
+  if (cat === 'reimb') return { taxRate: 0, isReimbursement: true }
+  if (cat === 'incl') return { taxRate: 0, isReimbursement: false }
+  return { taxRate: Number(cat) as TaxRate, isReimbursement: false }
+}
+
 export default function InvoiceForm() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -284,7 +300,7 @@ export default function InvoiceForm() {
                   <th className="pb-2">品目名</th>
                   <th className="pb-2 w-20 text-right">数量</th>
                   <th className="pb-2 w-32 text-right">単価</th>
-                  <th className="pb-2 w-24">税率</th>
+                  <th className="pb-2 w-28">区分</th>
                   <th className="pb-2 w-32 text-right">金額</th>
                   <th className="pb-2 w-10"></th>
                 </tr>
@@ -321,14 +337,15 @@ export default function InvoiceForm() {
                     <td className="py-1 pr-2">
                       <select
                         className={inputCls}
-                        value={it.taxRate}
+                        value={itemCategory(it)}
                         onChange={(e) =>
-                          updateItem(it.id, { taxRate: Number(e.target.value) as TaxRate })
+                          updateItem(it.id, categoryPatch(e.target.value as ItemCategory))
                         }
                       >
-                        <option value={10}>10%</option>
-                        <option value={8}>8%</option>
-                        <option value={0}>税込</option>
+                        <option value="10">10%</option>
+                        <option value="8">8%</option>
+                        <option value="incl">税込</option>
+                        <option value="reimb">立替金</option>
                       </select>
                     </td>
                     <td className="py-1 pr-2 text-right font-medium text-slate-700">
@@ -383,6 +400,18 @@ export default function InvoiceForm() {
                   <span>税込入力分</span>
                   <span>{yen(totals.inclTotal)}</span>
                 </div>
+              )}
+              {totals.reimbursementTotal > 0 && (
+                <>
+                  <div className="flex justify-between border-t border-slate-100 pt-1.5 text-slate-600">
+                    <span>立替金を除く請求額</span>
+                    <span>{yen(totals.revenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>立替金</span>
+                    <span>{yen(totals.reimbursementTotal)}</span>
+                  </div>
+                </>
               )}
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-800">
                 <span>{form.issuer.taxMode === 'exempt' ? '合計' : '合計（税込）'}</span>

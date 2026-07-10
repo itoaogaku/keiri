@@ -5,9 +5,15 @@ import { yen, jpDate } from '../lib/format'
 import {
   STATUS_LABELS,
   TAX_RATE_LABELS,
+  type InvoiceItem,
   type InvoiceStatus,
   type IssuerProfile,
 } from '../types'
+
+/** 明細の区分ラベル（立替金 or 税率/税込） */
+function itemCatLabel(it: InvoiceItem): string {
+  return it.isReimbursement ? '立替金' : TAX_RATE_LABELS[it.taxRate]
+}
 import StatusBadge from '../components/StatusBadge'
 
 /** 振込先を1行ずつの表示用テキストに整形する（構造化 → 行配列） */
@@ -203,7 +209,7 @@ export default function InvoiceDetail() {
               <th className="py-2">品目</th>
               <th className="py-2 text-right">数量</th>
               <th className="py-2 text-right">単価</th>
-              <th className="py-2 text-center">税率</th>
+              <th className="py-2 text-center">区分</th>
               <th className="py-2 text-right">金額</th>
             </tr>
           </thead>
@@ -213,7 +219,7 @@ export default function InvoiceDetail() {
                 <td className="py-2 text-slate-800">{it.name || '—'}</td>
                 <td className="py-2 text-right text-slate-600">{it.quantity.toLocaleString()}</td>
                 <td className="py-2 text-right text-slate-600">{yen(it.unitPrice)}</td>
-                <td className="py-2 text-center text-slate-600">{TAX_RATE_LABELS[it.taxRate]}</td>
+                <td className="py-2 text-center text-slate-600">{itemCatLabel(it)}</td>
                 <td className="py-2 text-right font-medium text-slate-800">{yen(lineNet(it))}</td>
               </tr>
             ))}
@@ -257,6 +263,18 @@ export default function InvoiceDetail() {
                 <span>税込入力分</span>
                 <span>{yen(t.inclTotal)}</span>
               </div>
+            )}
+            {t.reimbursementTotal > 0 && (
+              <>
+                <div className="flex justify-between border-t border-slate-200 pt-1.5 text-slate-600">
+                  <span>立替金を除く請求額</span>
+                  <span>{yen(t.revenue)}</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>立替金</span>
+                  <span>{yen(t.reimbursementTotal)}</span>
+                </div>
+              </>
             )}
             <div className="flex justify-between border-t-2 border-slate-300 pt-2 text-lg font-bold text-slate-800">
               <span>合計</span>

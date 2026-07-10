@@ -14,9 +14,13 @@ export interface TaxBreakdown {
   subtotal: number
   /** 消費税合計 */
   taxTotal: number
-  /** 税込入力分の合計（消費税を加算しない） */
+  /** 税込入力分の合計（消費税を加算しない・立替金は含まない） */
   inclTotal: number
-  /** 総合計 */
+  /** 立替金の合計（消費税を加算しない） */
+  reimbursementTotal: number
+  /** 立替金を除いた請求額（収益）＝ subtotal + taxTotal + inclTotal */
+  revenue: number
+  /** 総合計（＝ revenue + reimbursementTotal） */
   total: number
 }
 
@@ -34,9 +38,12 @@ export function computeTotals(
 ): TaxBreakdown {
   const netByRate: Record<TaxRate, number> = { 10: 0, 8: 0, 0: 0 }
   let inclTotal = 0
+  let reimbursementTotal = 0
 
   for (const item of items) {
-    if (item.taxRate === 0) {
+    if (item.isReimbursement) {
+      reimbursementTotal += lineNet(item)
+    } else if (item.taxRate === 0) {
       inclTotal += lineNet(item)
     } else {
       netByRate[item.taxRate] += lineNet(item)
@@ -52,6 +59,7 @@ export function computeTotals(
 
   const subtotal = netByRate[8] + netByRate[10]
   const taxTotal = taxByRate[8] + taxByRate[10]
+  const revenue = subtotal + taxTotal + inclTotal
 
   return {
     netByRate,
@@ -59,6 +67,8 @@ export function computeTotals(
     subtotal,
     taxTotal,
     inclTotal,
-    total: subtotal + taxTotal + inclTotal,
+    reimbursementTotal,
+    revenue,
+    total: revenue + reimbursementTotal,
   }
 }
