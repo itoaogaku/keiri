@@ -185,10 +185,12 @@ function doPost(e) {
       case 'upsertInvoice':
         upsertInvoice(user, body.invoice, body.customerName)
         try { rebuildIssuerSheets() } catch (e2) {}
+        try { rebuildAnalysisSheet() } catch (e2b) {}
         return jsonOut({ ok: true })
       case 'deleteInvoice':
         deleteEntity(user, INVOICES, INVOICE_HEADERS, INVOICE_CREATOR_IDX, body.id)
         try { rebuildIssuerSheets() } catch (e3) {}
+        try { rebuildAnalysisSheet() } catch (e3b) {}
         return jsonOut({ ok: true })
     }
     return jsonOut({ ok: false, error: 'unknown action' })
@@ -468,4 +470,138 @@ function rebuildIssuerSheets() {
 
     sh.getRange(1, 1, out.length, ISSUER_VIEW_HEADERS.length).setValues(out)
   })
+}
+
+// ================= 分析シート =================
+
+const ANALYSIS_SHEET = '分析'
+
+function newAgg() {
+  return { count: 0, revenue: 0, reimb: 0, total: 0 }
+}
+function addAgg(map, key, tt) {
+  if (!map[key]) map[key] = newAgg()
+  const m = map[key]
+  m.count += 1
+  m.revenue += tt.revenue
+  m.reimb += tt.reimbursement
+  m.total += tt.total
+}
+
+/** シートの指定行にブロック（2次元配列）を書き込み、次の空き行番号を返す */
+function writeBlock(sh, startRow, block) {
+  if (!block.length) return startRow
+  let cols = 0
+  block.forEach(function (r) { if (r.length > cols) cols = r.length })
+  const padded = block.map(function (r) {
+    const rr = r.slice()
+    while (rr.length < cols) rr.push('')
+    return rr
+  })
+  sh.getRange(startRow, 1, padded.length, cols).setValues(padded)
+  return startRow + padded.length
+}
+
+/**
+ * 「分析」シートを再構築。事業種別・請求者・月・ステータス別の集計と、
+ * 請求者×事業種別のクロス集計（立替金以外＝収益）をまとめる。
+ */
+function rebuildAnalysisSheet() {
+  const rows = readAll(getSheet(INVOICES, INVOICE_HEADERS))
+  const shortByName = issuerShortNameMap()
+
+  const byBiz = {}
+  const byIssuer = {}
+  const byMonth = {}
+  const byStatus = {}
+  const cross = {} // cross[issuer][biz] = 立替金以外(収益)
+  const bizSet = {}
+  const issuerSet = {}
+
+  rows.forEach(function (r) {
+    if (!r[0]) return
+    const items = safeParse(r[13], [])
+    const taxMode = (safeParse(r[14], {}) || {}).taxMode
+    const tt = computeTotals(items, taxMode)
+    const biz = String(r[19] || '未分類')
+    const issuerName = String(r[5] || '（未設定）')
+    const issuer = shortByName[issuerName] ? shortByName[issuerName] : issuerName
+    const ym = (toYmd(r[2]) || '').slice(0, 7) || '不明'
+    const status = String(r[4] || '')
+
+    addAgg(byBiz, biz, tt)
+    addAgg(byIssuer, issuer, tt)
+    addAgg(byMonth, ym, tt)
+    addAgg(byStatus, status, tt)
+    bizSet[biz] = true
+    issuerSet[issuer] = true
+    if (!cross[issuer]) cross[issuer] = {}
+    cross[issuer][biz] = (cross[issuer][biz] || 0) + tt.revenue
+  })
+
+  const book = ss()
+  let sh = book.getSheetByName(ANALYSIS_SHEET)
+  if (!sh) sh = book.insertSheet(ANALYSIS_SHEET)
+  sh.clear()
+
+  const now = Utilities.formatDate(new Date(), ss().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm')
+  let row = 1
+  row = writeBlock(sh, row, [['売上分析'], ['最終更新: ' + now]])
+  row += 1
+
+  // --- 集計テーブル（件数・立替金以外・立替金・合計） ---
+  const sumTable = function (title, map, sortByTotalDesc) {
+    const head = [[title], ['区分', '件数', '立替金以外', '立替金', '合計']]
+    let keys = Object.keys(map)
+    if (sortByTotalDesc) keys.sort(function (a, b) { return map[b].total - map[a].total })
+    else keys.sort()
+    let c = 0, rev = 0, rem = 0, tot = 0
+    keys.forEach(function (k) {
+      const m = map[k]
+      head.push([k, m.count, m.revenue, m.reimb, m.total])
+      c += m.count; rev += m.revenue; rem += m.reimb; tot += m.total
+    })
+    head.push(['合計', c, rev, rem, tot])
+    return head
+  }
+
+  row = writeBlock(sh, row, sumTable('■ 事業種別別', byBiz, true)); row += 1
+  row = writeBlock(sh, row, sumTable('■ 請求者別', byIssuer, true)); row += 1
+
+  // 月別は日付順（新しい順）
+  const monthKeys = Object.keys(byMonth).sort().reverse()
+  const monthBlock = [['■ 月別（発行月）'], ['月', '件数', '立替金以外', '立替金', '合計']]
+  let mc = 0, mr = 0, mm = 0, mt = 0
+  monthKeys.forEach(function (k) {
+    const m = byMonth[k]
+    monthBlock.push([k, m.count, m.revenue, m.reimb, m.total])
+    mc += m.count; mr += m.revenue; mm += m.reimb; mt += m.total
+  })
+  monthBlock.push(['合計', mc, mr, mm, mt])
+  row = writeBlock(sh, row, monthBlock); row += 1
+
+  row = writeBlock(sh, row, sumTable('■ ステータス別', byStatus, true)); row += 1
+
+  // --- 請求者 × 事業種別（立替金以外＝収益） ---
+  const bizList = Object.keys(bizSet).sort()
+  const issuerList = Object.keys(issuerSet).sort()
+  const crossBlock = [['■ 請求者 × 事業種別（立替金以外の売上）']]
+  crossBlock.push(['請求者＼事業種別'].concat(bizList).concat(['合計']))
+  const colSums = bizList.map(function () { return 0 })
+  let grand = 0
+  issuerList.forEach(function (iss) {
+    const line = [iss]
+    let rowTotal = 0
+    bizList.forEach(function (bz, idx) {
+      const v = (cross[iss] && cross[iss][bz]) || 0
+      line.push(v)
+      rowTotal += v
+      colSums[idx] += v
+    })
+    line.push(rowTotal)
+    grand += rowTotal
+    crossBlock.push(line)
+  })
+  crossBlock.push(['合計'].concat(colSums).concat([grand]))
+  row = writeBlock(sh, row, crossBlock)
 }
