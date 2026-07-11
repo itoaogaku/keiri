@@ -53,6 +53,7 @@ function SheetConnection() {
 
 const EMPTY: Omit<IssuerProfile, 'id'> = {
   name: '',
+  shortName: '',
   taxMode: 'taxable',
   registrationNumber: '',
   address: '',
@@ -274,6 +275,20 @@ export default function Settings() {
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  略称（売上シート名用）
+                </label>
+                <input
+                  className={inputCls}
+                  placeholder="例：一社ACC（課税）"
+                  value={draft.shortName ?? ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, shortName: e.target.value }))}
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  スプレッドシートの「売上_◯◯」シート名に使われます（未入力なら正式名称）。
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">課税区分</label>

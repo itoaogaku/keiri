@@ -377,10 +377,20 @@ function getStateFor(user) {
 
 // ================= 請求者ごとの売上シート =================
 
-/** シート名に使えない文字を除去して「売上_<請求者>」を返す */
-function issuerSheetName(issuer) {
-  const safe = String(issuer || '（未設定）').replace(/[\[\]\*\?\/\\:]/g, ' ').slice(0, 90)
+/** シート名に使えない文字を除去して「売上_<ラベル>」を返す */
+function issuerSheetName(label) {
+  const safe = String(label || '（未設定）').replace(/[\[\]\*\?\/\\:]/g, ' ').slice(0, 90)
   return ISSUER_SHEET_PREFIX + safe
+}
+
+/** 設定(請求者)の 正式名称→略称 マップを作る */
+function issuerShortNameMap() {
+  const map = {}
+  const config = readConfig()
+  ;(config.issuers || []).forEach(function (i) {
+    if (i && i.name) map[i.name] = String(i.shortName || '').trim()
+  })
+  return map
 }
 
 /**
@@ -413,19 +423,30 @@ function rebuildIssuerSheets() {
   })
 
   const book = ss()
+  const shortByName = issuerShortNameMap()
+  const labelFor = function (issuer) {
+    return shortByName[issuer] ? shortByName[issuer] : issuer
+  }
+
   const targetNames = {}
   Object.keys(groups).forEach(function (issuer) {
-    targetNames[issuerSheetName(issuer)] = true
+    targetNames[issuerSheetName(labelFor(issuer))] = true
   })
 
-  // 対象外になった売上シート（請求者名変更・全削除など）は中身を空にする
+  // 対象外になった売上シート（略称変更・請求者名変更・全削除など）は削除する
   book.getSheets().forEach(function (s) {
     const nm = s.getName()
-    if (nm.indexOf(ISSUER_SHEET_PREFIX) === 0 && !targetNames[nm]) s.clearContents()
+    if (nm.indexOf(ISSUER_SHEET_PREFIX) === 0 && !targetNames[nm]) {
+      try {
+        book.deleteSheet(s)
+      } catch (e) {
+        s.clearContents()
+      }
+    }
   })
 
   Object.keys(groups).forEach(function (issuer) {
-    const name = issuerSheetName(issuer)
+    const name = issuerSheetName(labelFor(issuer))
     let sh = book.getSheetByName(name)
     if (!sh) sh = book.insertSheet(name)
     sh.clearContents()

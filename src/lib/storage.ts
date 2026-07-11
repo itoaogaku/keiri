@@ -5,11 +5,13 @@ const STORAGE_KEY = 'keiri.appdata.v2'
 function makeIssuer(
   id: string,
   name: string,
-  taxMode: IssuerProfile['taxMode']
+  taxMode: IssuerProfile['taxMode'],
+  shortName = ''
 ): IssuerProfile {
   return {
     id,
     name,
+    shortName,
     taxMode,
     registrationNumber: '',
     address: '',
@@ -33,11 +35,11 @@ export const DEFAULT_BUSINESS_TYPES: string[] = [
 
 /** 使い分け可能な5つの請求者プロファイル（初期値） */
 export const DEFAULT_ISSUERS: IssuerProfile[] = [
-  makeIssuer('issuer-acc-kk', '株式会社アスリートキャリアセンター', 'taxable'),
-  makeIssuer('issuer-acc-shadan-exempt', '一般社団法人アスリートキャリアセンター（非課税枠）', 'exempt'),
-  makeIssuer('issuer-acc-shadan-taxable', '一般社団法人アスリートキャリアセンター（課税枠）', 'taxable'),
-  makeIssuer('issuer-hara-ds', '株式会社原D&S', 'taxable'),
-  makeIssuer('issuer-aogaku-tf', '青山学院大学陸上競技部', 'taxable'),
+  makeIssuer('issuer-acc-kk', '株式会社アスリートキャリアセンター', 'taxable', '株ACC'),
+  makeIssuer('issuer-acc-shadan-exempt', '一般社団法人アスリートキャリアセンター（非課税枠）', 'exempt', '一社ACC（非課税）'),
+  makeIssuer('issuer-acc-shadan-taxable', '一般社団法人アスリートキャリアセンター（課税枠）', 'taxable', '一社ACC（課税）'),
+  makeIssuer('issuer-hara-ds', '株式会社原D&S', 'taxable', '原D&S'),
+  makeIssuer('issuer-aogaku-tf', '青山学院大学陸上競技部', 'taxable', '青学陸上'),
 ]
 
 /**

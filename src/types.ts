@@ -87,6 +87,8 @@ export interface IssuerProfile {
   id: string
   /** 請求者名（例：株式会社アスリートキャリアセンター） */
   name: string
+  /** 略称（スプレッドシートの売上シート名に使用。例：一社ACC（課税）） */
+  shortName?: string
   /** 課税区分（非課税枠は消費税を計算しない） */
   taxMode: TaxMode
   /** 適格請求書発行事業者登録番号（例：T1234567890123／非課税枠は空でも可） */
