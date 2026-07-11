@@ -207,7 +207,7 @@ export default function InvoiceDetail() {
               <img
                 src={seal}
                 alt="角印"
-                className="pointer-events-none absolute right-0 top-12 h-20 w-20 object-contain"
+                className="pointer-events-none absolute right-0 top-2 h-20 w-20 object-contain"
                 style={{
                   mixBlendMode: 'multiply',
                   WebkitPrintColorAdjust: 'exact',
