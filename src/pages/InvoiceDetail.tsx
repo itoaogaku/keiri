@@ -153,6 +153,12 @@ export default function InvoiceDetail() {
             ✏️ 編集
           </button>
           <button
+            onClick={() => navigate(`/invoices/${inv.id}/receipt`)}
+            className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+          >
+            🧾 領収書
+          </button>
+          <button
             onClick={handlePrint}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
           >
