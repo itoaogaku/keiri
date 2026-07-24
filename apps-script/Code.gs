@@ -200,12 +200,16 @@ function doPost(e) {
         if (!user.isOwner) return jsonOut({ ok: false, error: 'forbidden' })
         writeConfig(body.config)
         return jsonOut({ ok: true })
-      case 'upsertCustomer':
-        upsertCustomer(user, body.customer)
-        return jsonOut({ ok: true })
+      case 'upsertCustomer': {
+        const savedId = upsertCustomer(user, body.customer)
+        return jsonOut({ ok: true, id: savedId })
+      }
       case 'deleteCustomer':
-        deleteEntity(user, CUSTOMERS, CUSTOMER_HEADERS, CUSTOMER_CREATOR_IDX, body.id)
+        deleteShared(CUSTOMERS, CUSTOMER_HEADERS, body.id)
         return jsonOut({ ok: true })
+      case 'mergeCustomers':
+        if (!user.isOwner) return jsonOut({ ok: false, error: 'forbidden' })
+        return jsonOut({ ok: true, merged: mergeDuplicateCustomers() })
       case 'upsertInvoice':
         upsertInvoice(user, body.invoice, body.customerName)
         try { rebuildIssuerSheets() } catch (e2) {}
@@ -324,12 +328,150 @@ function deleteEntity(user, sheetName, headers, creatorIdx, id) {
   sh.deleteRow(r)
 }
 
+/**
+ * 顧客は全員共有の台帳として扱う（作成者による閲覧・編集制限をかけない）。
+ * 誰が登録・編集しても構わないため、権限チェックなしで書き込む。
+ */
+function writeShared(user, sh, id, baseRow, creatorIdx) {
+  const r = findRow(sh, id)
+  const creator = r !== -1 ? creatorOfRow(sh, r, creatorIdx) || user.email : user.email
+  const row = baseRow.slice()
+  row[creatorIdx] = creator
+  if (r === -1) {
+    sh.insertRowBefore(2)
+    sh.getRange(2, 1, 1, row.length).setValues([row])
+  } else {
+    sh.getRange(r, 1, 1, row.length).setValues([row])
+  }
+}
+
+function deleteShared(sheetName, headers, id) {
+  const sh = getSheet(sheetName, headers)
+  const r = findRow(sh, id)
+  if (r !== -1) sh.deleteRow(r)
+}
+
+function normCompanyName(s) {
+  return String(s == null ? '' : s).trim().toLowerCase()
+}
+
+/** 企業名が完全一致する既存顧客の行番号を返す（自分自身のidは除く） */
+function findCustomerRowByName(sh, companyName, excludeId) {
+  const last = sh.getLastRow()
+  if (last < 2) return -1
+  const rows = sh.getRange(2, 1, last - 1, 2).getValues() // A:id, B:企業名
+  const target = normCompanyName(companyName)
+  if (!target) return -1
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(excludeId)) continue
+    if (normCompanyName(rows[i][1]) === target) return i + 2
+  }
+  return -1
+}
+
+/**
+ * 既存の重複顧客（企業名が同じ）を1件に統合する。
+ * - 各グループで、請求書からの参照が最も多い顧客を正とする（同数なら先頭）
+ * - 正の側で空欄の項目は、重複側の値で補完する
+ * - その顧客を参照している請求書の顧客IDを正のidへ付け替える
+ * - 重複行を削除する
+ * 戻り値は統合（削除）した件数。
+ */
+function mergeDuplicateCustomers() {
+  const sh = getSheet(CUSTOMERS, CUSTOMER_HEADERS)
+  const last = sh.getLastRow()
+  if (last < 3) return 0
+  const numRows = last - 1
+  const data = sh.getRange(2, 1, numRows, CUSTOMER_HEADERS.length).getValues()
+
+  const groups = {}
+  data.forEach(function (r, i) {
+    if (!r[0]) return
+    const key = normCompanyName(r[1])
+    if (!key) return
+    if (!groups[key]) groups[key] = []
+    groups[key].push({ sheetRow: i + 2, id: String(r[0]), row: r })
+  })
+
+  const invSh = getSheet(INVOICES, INVOICE_HEADERS)
+  const invLast = invSh.getLastRow()
+  const custIdCol = 8 // 「顧客ID」列（1始まり）
+  const invIds = invLast >= 2 ? invSh.getRange(2, custIdCol, invLast - 1, 1).getValues() : []
+
+  const counts = {}
+  invIds.forEach(function (c) {
+    const cid = String(c[0])
+    counts[cid] = (counts[cid] || 0) + 1
+  })
+
+  const rowsToDelete = []
+  const idRemap = {}
+  let mergedCount = 0
+
+  Object.keys(groups).forEach(function (key) {
+    const list = groups[key]
+    if (list.length < 2) return
+    list.sort(function (a, b) { return (counts[b.id] || 0) - (counts[a.id] || 0) })
+    const canonical = list[0]
+    const dups = list.slice(1)
+
+    const merged = canonical.row.slice()
+    dups.forEach(function (d) {
+      for (let col = 2; col <= 5; col++) { // 担当者/メール/住所/電話
+        if (!merged[col] && d.row[col]) merged[col] = d.row[col]
+      }
+    })
+    sh.getRange(canonical.sheetRow, 1, 1, CUSTOMER_HEADERS.length).setValues([merged])
+
+    dups.forEach(function (d) {
+      idRemap[d.id] = canonical.id
+      rowsToDelete.push(d.sheetRow)
+      mergedCount++
+    })
+  })
+
+  if (Object.keys(idRemap).length && invLast >= 2) {
+    const range = invSh.getRange(2, custIdCol, invLast - 1, 1)
+    const ids = range.getValues()
+    let changed = false
+    for (let i = 0; i < ids.length; i++) {
+      const cid = String(ids[i][0])
+      if (idRemap[cid]) {
+        ids[i][0] = idRemap[cid]
+        changed = true
+      }
+    }
+    if (changed) range.setValues(ids)
+  }
+
+  // 行番号がずれないよう、大きい行番号から削除する
+  rowsToDelete.sort(function (a, b) { return b - a })
+  rowsToDelete.forEach(function (r) { sh.deleteRow(r) })
+
+  if (mergedCount > 0) {
+    try { rebuildIssuerSheets() } catch (e) {}
+    try { rebuildAnalysisSheet() } catch (e) {}
+  }
+  return mergedCount
+}
+
 // ================= マッピング =================
 
+/**
+ * 顧客は全員共有の台帳。企業名が一致する既存顧客があれば、
+ * 新規作成せずその既存行を更新する（同じ会社が複数人の入力で
+ * 重複登録されるのを防ぐ）。戻り値は実際に書き込んだid。
+ */
 function upsertCustomer(user, c) {
   const sh = getSheet(CUSTOMERS, CUSTOMER_HEADERS)
-  const base = [c.id, c.companyName, c.contactName, c.email, c.address, c.phone, '']
-  writeWithGuard(user, sh, c.id, base, CUSTOMER_CREATOR_IDX)
+  let targetId = c.id
+  const dupRow = findCustomerRowByName(sh, c.companyName, c.id)
+  if (dupRow !== -1) {
+    targetId = String(sh.getRange(dupRow, 1).getValue())
+  }
+  const base = [targetId, c.companyName, c.contactName, c.email, c.address, c.phone, '']
+  writeShared(user, sh, targetId, base, CUSTOMER_CREATOR_IDX)
+  return targetId
 }
 
 function upsertInvoice(user, inv, customerName) {
@@ -378,9 +520,9 @@ function getStateFor(user) {
   const custRows = readAll(getSheet(CUSTOMERS, CUSTOMER_HEADERS))
   const invRows = readAll(getSheet(INVOICES, INVOICE_HEADERS))
 
+  // 顧客は全員共有の台帳のため、作成者に関わらず全件を返す
   const customers = custRows
     .filter(function (r) { return r[0] })
-    .filter(function (r) { return user.isOwner || normEmail(r[CUSTOMER_CREATOR_IDX]) === em })
     .map(function (r) {
       return {
         id: String(r[0]), companyName: String(r[1] == null ? '' : r[1]),

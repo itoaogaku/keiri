@@ -229,9 +229,24 @@ export async function nextReceiptNumber(
   return res.receiptNumber ?? null
 }
 
+/**
+ * 重複顧客（企業名が同じ）を1件に統合する（オーナーのみ）。
+ * 戻り値は統合（削除）した件数。
+ */
+export async function mergeCustomers(url: string, auth: Auth): Promise<number> {
+  const res = await post<{ ok?: boolean; merged?: number; error?: string }>(url, {
+    action: 'mergeCustomers',
+    auth,
+  })
+  if (res.ok === false) throw new Error(res.error || 'merge failed')
+  return res.merged ?? 0
+}
+
 export const remote = {
+  // 顧客は共有台帳。企業名が既存と一致する場合、GASはその既存idへ統合して
+  // 書き込むため、実際に保存されたid（呼び出し時と異なる場合がある）を返す。
   saveCustomer: (url: string, auth: Auth, customer: Customer) =>
-    post(url, { action: 'upsertCustomer', auth, customer }),
+    post<{ ok?: boolean; id?: string }>(url, { action: 'upsertCustomer', auth, customer }),
   deleteCustomer: (url: string, auth: Auth, id: string) =>
     post(url, { action: 'deleteCustomer', auth, id }),
   saveInvoice: (url: string, auth: Auth, invoice: Invoice, customerName: string) =>

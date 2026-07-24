@@ -19,6 +19,7 @@ import {
   saveConfig as gasSaveConfig,
   nextInvoiceNumber as gasNextInvoiceNumber,
   nextReceiptNumber as gasNextReceiptNumber,
+  mergeCustomers as gasMergeCustomers,
   remote,
   type Auth,
 } from '../lib/gas'
@@ -54,11 +55,13 @@ interface AppContextValue {
   addInvoice: (inv: Invoice) => Invoice
   updateInvoice: (inv: Invoice) => void
   deleteInvoice: (id: string) => void
-  // 顧客
+  // 顧客（全アカウント共有台帳）
   getCustomer: (id: string) => Customer | undefined
   addCustomer: (c: Omit<Customer, 'id'>) => Customer
   updateCustomer: (c: Customer) => void
   deleteCustomer: (id: string) => void
+  /** 同名の重複顧客を1件に統合する（オーナーのみ・同期時のみ）。統合後は最新データを再取得する */
+  mergeDuplicateCustomers: () => Promise<number | null>
   // 請求者
   getIssuer: (id: string) => IssuerProfile | undefined
   addIssuer: (i: Omit<IssuerProfile, 'id'>) => IssuerProfile
@@ -285,10 +288,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [data.customers]
   )
 
+  // 顧客は全アカウント共有の台帳。GAS側が企業名の重複を検出した場合、
+  // 新規idではなく既存の顧客idへ統合して書き込むため、
+  // 返ってきたidが異なれば手元のidをそちらへ差し替える（自分の請求書の
+  // 参照も含めて）。これにより同じ会社が2件に増えるのを防ぐ。
+  const reconcileCustomerId = (localId: string, canonicalId?: string) => {
+    if (!canonicalId || canonicalId === localId) return
+    setData((d) => ({
+      ...d,
+      customers: d.customers.map((x) => (x.id === localId ? { ...x, id: canonicalId } : x)),
+      invoices: d.invoices.map((inv) =>
+        inv.customerId === localId ? { ...inv, customerId: canonicalId } : inv
+      ),
+    }))
+  }
+
   const addCustomer = useCallback((c: Omit<Customer, 'id'>): Customer => {
     const saved: Customer = { ...c, id: newId() }
     setData((d) => ({ ...d, customers: [...d.customers, saved] }))
-    push((url, auth) => remote.saveCustomer(url, auth, saved))
+    const url = gasRef.current
+    const s = sessionRef.current
+    if (url && s) {
+      remote
+        .saveCustomer(url, { email: s.email, pin: s.pin }, saved)
+        .then((res) => reconcileCustomerId(saved.id, res?.id))
+        .catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
+    }
     return saved
   }, [])
 
@@ -297,13 +322,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
       customers: d.customers.map((x) => (x.id === c.id ? c : x)),
     }))
-    push((url, auth) => remote.saveCustomer(url, auth, c))
+    const url = gasRef.current
+    const s = sessionRef.current
+    if (url && s) {
+      remote
+        .saveCustomer(url, { email: s.email, pin: s.pin }, c)
+        .then((res) => reconcileCustomerId(c.id, res?.id))
+        .catch((e) => console.warn('[keiri] スプレッドシート同期に失敗しました', e))
+    }
   }, [])
 
   const deleteCustomer = useCallback((id: string) => {
     setData((d) => ({ ...d, customers: d.customers.filter((c) => c.id !== id) }))
     push((url, auth) => remote.deleteCustomer(url, auth, id))
   }, [])
+
+  // GASから最新の顧客・請求書・領収書・共有設定を再取得する
+  const refreshFromServer = useCallback(async () => {
+    const url = gasRef.current
+    const s = sessionRef.current
+    if (!url || !s) return
+    try {
+      const remoteState = await fetchState(url, { email: s.email, pin: s.pin })
+      const localIssuers = dataRef.current.issuers
+      const localBiz = dataRef.current.businessTypes
+      const issuers = remoteState.issuers.length ? remoteState.issuers : localIssuers
+      const businessTypes = remoteState.businessTypes.length
+        ? remoteState.businessTypes
+        : localBiz
+      setData((d) => ({
+        ...d,
+        customers: remoteState.customers,
+        invoices: remoteState.invoices,
+        receipts: remoteState.receipts,
+        issuers,
+        businessTypes,
+      }))
+    } catch (e) {
+      console.warn('[keiri] 再取得に失敗しました', e)
+    }
+  }, [])
+
+  // 同名の重複顧客をGAS側で統合し、最新データを再取得する（オーナーのみ）
+  const mergeDuplicateCustomers = useCallback(async (): Promise<number | null> => {
+    const url = gasRef.current
+    const s = sessionRef.current
+    if (!url || !s) return null
+    try {
+      const merged = await gasMergeCustomers(url, { email: s.email, pin: s.pin })
+      if (merged > 0) await refreshFromServer()
+      return merged
+    } catch (e) {
+      console.warn('[keiri] 重複統合に失敗しました', e)
+      return null
+    }
+  }, [refreshFromServer])
 
   const getIssuer = useCallback(
     (id: string) => data.issuers.find((i) => i.id === id),
@@ -388,6 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomer,
       updateCustomer,
       deleteCustomer,
+      mergeDuplicateCustomers,
       getIssuer,
       addIssuer,
       updateIssuer,
@@ -418,6 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomer,
       updateCustomer,
       deleteCustomer,
+      mergeDuplicateCustomers,
       getIssuer,
       addIssuer,
       updateIssuer,

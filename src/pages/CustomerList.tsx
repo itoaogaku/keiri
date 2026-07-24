@@ -11,10 +11,23 @@ const EMPTY: Omit<Customer, 'id'> = {
 }
 
 export default function CustomerList() {
-  const { data, addCustomer, updateCustomer, deleteCustomer } = useApp()
+  const { data, session, syncEnabled, addCustomer, updateCustomer, deleteCustomer, mergeDuplicateCustomers } =
+    useApp()
   const [editing, setEditing] = useState<Customer | null>(null)
   const [draft, setDraft] = useState<Omit<Customer, 'id'>>(EMPTY)
   const [open, setOpen] = useState(false)
+  const [merging, setMerging] = useState(false)
+  const isOwner = !session || session.role === 'owner'
+
+  const handleMerge = async () => {
+    if (!confirm('企業名が同じ顧客を1件に統合します。よろしいですか？')) return
+    setMerging(true)
+    const merged = await mergeDuplicateCustomers()
+    setMerging(false)
+    if (merged === null) alert('統合に失敗しました。接続をご確認ください。')
+    else if (merged === 0) alert('重複している顧客は見つかりませんでした。')
+    else alert(`${merged}件の重複を統合しました。`)
+  }
 
   const inputCls =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
@@ -45,12 +58,23 @@ export default function CustomerList() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">顧客一覧</h1>
-        <button
-          onClick={openNew}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
-        >
-          ＋ 顧客を登録
-        </button>
+        <div className="flex gap-2">
+          {isOwner && syncEnabled && (
+            <button
+              onClick={handleMerge}
+              disabled={merging}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {merging ? '統合中…' : '重複を統合'}
+            </button>
+          )}
+          <button
+            onClick={openNew}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
+          >
+            ＋ 顧客を登録
+          </button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
