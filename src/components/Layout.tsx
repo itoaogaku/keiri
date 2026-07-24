@@ -4,7 +4,7 @@ import { useApp } from '../store/AppContext'
 const NAV = [
   { to: '/', label: 'ダッシュボード', icon: '📊', end: true, ownerOnly: false },
   { to: '/invoices', label: '請求書', icon: '📄', end: false, ownerOnly: false },
-  { to: '/receipts/new', label: '領収書発行', icon: '🧾', end: false, ownerOnly: false },
+  { to: '/receipts', label: '領収書', icon: '🧾', end: false, ownerOnly: false },
   { to: '/customers', label: '顧客一覧', icon: '👥', end: false, ownerOnly: false },
   { to: '/settings', label: '設定', icon: '⚙️', end: false, ownerOnly: true },
 ]

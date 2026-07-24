@@ -132,10 +132,36 @@ export interface Invoice {
   creator?: string
 }
 
+/** 請求元スナップショット（角印を除く。領収書に埋め込む） */
+export type ReceiptIssuer = Omit<IssuerProfile, 'sealImage'>
+
+/** 領収書（請求書に紐づく発行分・単独発行分の両方を保持） */
+export interface Receipt {
+  id: string
+  receiptNo: string
+  receiptDate: string // YYYY-MM-DD
+  recipientName: string
+  honorific: Honorific
+  exempt: boolean
+  subtotal: number
+  taxTotal: number
+  total: number
+  note: string
+  issuer: ReceiptIssuer
+  /** 元になった請求書（単独発行の場合は空） */
+  invoiceId?: string
+  invoiceNumber?: string
+  createdAt: string
+  updatedAt: string
+  /** 作成者メール（GASが付与。閲覧制御に使用） */
+  creator?: string
+}
+
 /** アプリ全体の永続化データ */
 export interface AppData {
   customers: Customer[]
   invoices: Invoice[]
+  receipts: Receipt[]
   /** 使い分け可能な請求者プロファイル一覧 */
   issuers: IssuerProfile[]
   /** 事業種別の選択肢（ユーザーが追加・削除できる） */

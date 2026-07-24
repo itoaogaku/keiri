@@ -1,28 +1,53 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../store/AppContext'
 import { knockoutBackground } from '../lib/image'
+import { newId } from '../lib/invoice'
 import { compactDate, toISODate } from '../lib/format'
 import ReceiptDocument, {
   type ReceiptData,
   type ReceiptTaxLine,
 } from '../components/ReceiptDocument'
 import { usePrintFilename } from '../lib/print'
-import type { Honorific } from '../types'
+import type { Honorific, Receipt } from '../types'
 
 type RateOpt = '10' | '8' | 'exempt'
 
 export default function StandaloneReceipt() {
-  const { data: app } = useApp()
+  const {
+    data: app,
+    getReceipt,
+    addReceipt,
+    updateReceipt,
+    fetchNextReceiptNumber,
+    syncEnabled,
+  } = useApp()
   const print = usePrintFilename()
+
+  // このページを開いている間、同じ領収書ドラフトのidを保つ（保存は上書き＝重複しない）
+  const [receiptId] = useState(() => newId())
 
   const [issuerId, setIssuerId] = useState(app.issuers[0]?.id ?? '')
   const [recipient, setRecipient] = useState('')
   const [honorific, setHonorific] = useState<Honorific>('御中')
   const [receiptDate, setReceiptDate] = useState(toISODate(new Date()))
-  const [receiptNo, setReceiptNo] = useState(`R-${compactDate(new Date())}-001`)
+  const [receiptNo, setReceiptNo] = useState(`R-${compactDate(new Date())}-01`)
   const [amount, setAmount] = useState(0) // 税込金額
   const [rate, setRate] = useState<RateOpt>('10')
   const [note, setNote] = useState('お品代として')
+  const [saved, setSaved] = useState(false)
+
+  // 全領収書を対象にした次番号を取得（同期時のみ。未同期はローカル既定のまま）
+  useEffect(() => {
+    if (!syncEnabled) return
+    let cancelled = false
+    fetchNextReceiptNumber().then((num) => {
+      if (!cancelled && num) setReceiptNo(num)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncEnabled])
 
   const issuer = app.issuers.find((i) => i.id === issuerId) ?? app.issuers[0]
 
@@ -80,6 +105,37 @@ export default function StandaloneReceipt() {
     ...breakdown,
   }
 
+  // 台帳（スプレッドシート）へ保存。同じidなら上書き（連打しても重複しない）
+  const persist = () => {
+    if (!issuer) return
+    const { sealImage: _seal, ...issuerSnapshot } = issuer
+    const now = new Date().toISOString()
+    const payload: Receipt = {
+      id: receiptId,
+      receiptNo,
+      receiptDate,
+      recipientName: recipient,
+      honorific,
+      exempt: breakdown.exempt,
+      subtotal: breakdown.subtotal,
+      taxTotal: breakdown.taxTotal,
+      total: breakdown.total,
+      note,
+      issuer: issuerSnapshot,
+      createdAt: getReceipt(receiptId)?.createdAt ?? now,
+      updatedAt: now,
+    }
+    if (getReceipt(receiptId)) updateReceipt(payload)
+    else addReceipt(payload)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const handlePrint = () => {
+    persist()
+    print(`領収書_${receiptNo}_${recipient}${honorific}`)
+  }
+
   const inputCls =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
 
@@ -87,18 +143,28 @@ export default function StandaloneReceipt() {
     <div>
       <div className="no-print mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">領収書の発行（単独）</h1>
-        <button
-          onClick={() => print(`領収書_${receiptNo}_${recipient}${honorific}`)}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
-        >
-          ⬇ PDFダウンロード
-        </button>
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-sm text-emerald-600">✓ 台帳に保存しました</span>}
+          <button
+            onClick={persist}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            台帳に保存
+          </button>
+          <button
+            onClick={handlePrint}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
+          >
+            ⬇ PDFダウンロード
+          </button>
+        </div>
       </div>
 
       {/* 入力フォーム（印刷時は非表示） */}
       <div className="no-print mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="mb-4 text-sm text-slate-500">
           請求書と関係なく領収書を発行できます（グッズ販売など）。金額は税込で入力してください。
+          発行した領収書はスプレッドシートの「領収書」シートに台帳として蓄積されます。
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>

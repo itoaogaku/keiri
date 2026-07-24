@@ -17,6 +17,7 @@
 
 const CUSTOMERS = '顧客'
 const INVOICES = '請求書'
+const RECEIPTS = '領収書'
 const USERS = 'ユーザー'
 
 // 末尾に「作成者」列を持たせ、閲覧制御に使う
@@ -26,6 +27,11 @@ const INVOICE_HEADERS = [
   '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
   '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称', '事業種別', '作成者',
   '立替金以外', '立替金',
+]
+const RECEIPT_HEADERS = [
+  'id', '領収書番号', '領収日', '宛名', '敬称', '請求者', '課税区分',
+  '小計', '消費税', '合計', '但し書き', '請求者JSON', '請求書ID', '請求書番号',
+  '作成日時', '更新日時', '作成者',
 ]
 const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
@@ -41,6 +47,7 @@ const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', '�
 // 「作成者」列の位置（0始まり）
 const CUSTOMER_CREATOR_IDX = 6
 const INVOICE_CREATOR_IDX = 20
+const RECEIPT_CREATOR_IDX = 16
 
 const STATUS_LABELS = {
   draft: '下書き', issued: '発行済み', awaiting_payment: '入金待ち',
@@ -144,6 +151,21 @@ function nextInvoiceNumber(datePart) {
   return datePart + String(max + 1).padStart(2, '0')
 }
 
+/** 全領収書を対象に、指定日(YYYYMMDD)の次の領収書番号を採番する（R-YYYYMMDD-XX） */
+function nextReceiptNumber(datePart) {
+  const rows = readAll(getSheet(RECEIPTS, RECEIPT_HEADERS))
+  const prefix = 'R-' + datePart + '-'
+  let max = 0
+  rows.forEach(function (r) {
+    const num = String(r[1])
+    if (num.indexOf(prefix) === 0) {
+      const seq = parseInt(num.slice(prefix.length), 10)
+      if (!isNaN(seq) && seq > max) max = seq
+    }
+  })
+  return prefix + String(max + 1).padStart(2, '0')
+}
+
 // ================= HTTP ハンドラ =================
 
 function doGet() {
@@ -172,6 +194,8 @@ function doPost(e) {
         return jsonOut(getStateFor(user))
       case 'nextInvoiceNumber':
         return jsonOut({ ok: true, invoiceNumber: nextInvoiceNumber(String(body.datePart)) })
+      case 'nextReceiptNumber':
+        return jsonOut({ ok: true, receiptNumber: nextReceiptNumber(String(body.datePart)) })
       case 'saveConfig':
         if (!user.isOwner) return jsonOut({ ok: false, error: 'forbidden' })
         writeConfig(body.config)
@@ -191,6 +215,12 @@ function doPost(e) {
         deleteEntity(user, INVOICES, INVOICE_HEADERS, INVOICE_CREATOR_IDX, body.id)
         try { rebuildIssuerSheets() } catch (e3) {}
         try { rebuildAnalysisSheet() } catch (e3b) {}
+        return jsonOut({ ok: true })
+      case 'upsertReceipt':
+        upsertReceipt(user, body.receipt)
+        return jsonOut({ ok: true })
+      case 'deleteReceipt':
+        deleteEntity(user, RECEIPTS, RECEIPT_HEADERS, RECEIPT_CREATOR_IDX, body.id)
         return jsonOut({ ok: true })
     }
     return jsonOut({ ok: false, error: 'unknown action' })
@@ -324,6 +354,24 @@ function upsertInvoice(user, inv, customerName) {
   writeWithGuard(user, sh, inv.id, base, INVOICE_CREATOR_IDX)
 }
 
+function upsertReceipt(user, rc) {
+  const sh = getSheet(RECEIPTS, RECEIPT_HEADERS)
+  const issuer = rc.issuer || {}
+  const exempt = rc.exempt === true
+  const base = [
+    rc.id, rc.receiptNo || '', rc.receiptDate || '',
+    rc.recipientName || '', rc.honorific || '御中',
+    issuer.name || '',
+    exempt ? '非課税' : '課税',
+    rc.subtotal || 0, rc.taxTotal || 0, rc.total || 0,
+    rc.note || '', JSON.stringify(issuer),
+    rc.invoiceId || '', rc.invoiceNumber || '',
+    rc.createdAt || '', rc.updatedAt || '',
+    '', // 作成者（writeWithGuard が設定）
+  ]
+  writeWithGuard(user, sh, rc.id, base, RECEIPT_CREATOR_IDX)
+}
+
 /** 権限に応じてデータを絞り込んで返す */
 function getStateFor(user) {
   const em = normEmail(user.email)
@@ -367,11 +415,33 @@ function getStateFor(user) {
   invoices.sort(function (a, b) {
     return String(b.createdAt).localeCompare(String(a.createdAt))
   })
+
+  const rcRows = readAll(getSheet(RECEIPTS, RECEIPT_HEADERS))
+  const receipts = rcRows
+    .filter(function (r) { return r[0] })
+    .filter(function (r) { return user.isOwner || normEmail(r[RECEIPT_CREATOR_IDX]) === em })
+    .map(function (r) {
+      return {
+        id: String(r[0]), receiptNo: String(r[1] || ''), receiptDate: toYmd(r[2]),
+        recipientName: String(r[3] || ''), honorific: r[4] || '御中',
+        exempt: r[6] === '非課税',
+        subtotal: Number(r[7]) || 0, taxTotal: Number(r[8]) || 0, total: Number(r[9]) || 0,
+        note: String(r[10] || ''), issuer: safeParse(r[11], {}),
+        invoiceId: String(r[12] || ''), invoiceNumber: String(r[13] || ''),
+        createdAt: String(r[14] || ''), updatedAt: String(r[15] || ''),
+        creator: String(r[RECEIPT_CREATOR_IDX] || ''),
+      }
+    })
+  receipts.sort(function (a, b) {
+    return String(b.createdAt).localeCompare(String(a.createdAt))
+  })
+
   const config = readConfig()
   return {
     ok: true,
     customers: customers,
     invoices: invoices,
+    receipts: receipts,
     issuers: config.issuers,
     businessTypes: config.businessTypes,
   }

@@ -9,13 +9,17 @@ import ReceiptDocument, {
   type ReceiptTaxLine,
 } from '../components/ReceiptDocument'
 import { usePrintFilename } from '../lib/print'
+import type { Receipt } from '../types'
 
 export default function ReceiptView() {
   const { id } = useParams()
-  const { getInvoice, getCustomer, getIssuer } = useApp()
+  const { getInvoice, getCustomer, getIssuer, getReceipt, addReceipt, updateReceipt } = useApp()
 
   const inv = id ? getInvoice(id) : undefined
   const rawSeal = inv ? getIssuer(inv.issuerId)?.sealImage ?? inv.issuer.sealImage : undefined
+
+  // 請求書1件につき領収書は1件に保つ（idを請求書idから決定的に生成。再発行は上書き）
+  const receiptId = inv ? `receipt-${inv.id}` : ''
 
   const [processedSeal, setProcessedSeal] = useState<string | null>(null)
   useEffect(() => {
@@ -34,9 +38,16 @@ export default function ReceiptView() {
 
   const [receiptDate, setReceiptDate] = useState(toISODate(new Date()))
   const [note, setNote] = useState('')
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (inv && !note) {
+      const existing = getReceipt(receiptId)
+      if (existing) {
+        setNote(existing.note)
+        setReceiptDate(existing.receiptDate)
+        return
+      }
       const first = inv.items.find((it) => it.name.trim())?.name.trim()
       setNote(first ? `${first} 代として` : 'お品代として')
     }
@@ -88,6 +99,39 @@ export default function ReceiptView() {
     taxLines,
   }
 
+  // 台帳（スプレッドシート）へ保存。id固定なので再発行は上書き
+  const persist = () => {
+    const { sealImage: _seal, ...issuerSnapshot } = inv.issuer
+    const now = new Date().toISOString()
+    const existing = getReceipt(receiptId)
+    const payload: Receipt = {
+      id: receiptId,
+      receiptNo: inv.invoiceNumber,
+      receiptDate,
+      recipientName: recipient,
+      honorific,
+      exempt,
+      subtotal: t.subtotal,
+      taxTotal: t.taxTotal,
+      total: t.total,
+      note,
+      issuer: issuerSnapshot,
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    if (existing) updateReceipt(payload)
+    else addReceipt(payload)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const handlePrint = () => {
+    persist()
+    print(`領収書_${inv.invoiceNumber}_${recipient}${honorific}`)
+  }
+
   const inputCls =
     'rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
 
@@ -112,12 +156,21 @@ export default function ReceiptView() {
             <input className={`${inputCls} w-56`} value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         </div>
-        <button
-          onClick={() => print(`領収書_${inv.invoiceNumber}_${recipient}${honorific}`)}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
-        >
-          ⬇ PDFダウンロード
-        </button>
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-sm text-emerald-600">✓ 台帳に保存しました</span>}
+          <button
+            onClick={persist}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            台帳に保存
+          </button>
+          <button
+            onClick={handlePrint}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
+          >
+            ⬇ PDFダウンロード
+          </button>
+        </div>
       </div>
 
       <ReceiptDocument data={data} />

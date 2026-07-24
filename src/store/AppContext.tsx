@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AppData, Customer, Invoice, IssuerProfile, Session } from '../types'
+import type { AppData, Customer, Invoice, IssuerProfile, Receipt, Session } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
 import {
@@ -18,6 +18,7 @@ import {
   login as gasLogin,
   saveConfig as gasSaveConfig,
   nextInvoiceNumber as gasNextInvoiceNumber,
+  nextReceiptNumber as gasNextReceiptNumber,
   remote,
   type Auth,
 } from '../lib/gas'
@@ -68,6 +69,13 @@ interface AppContextValue {
   removeBusinessType: (name: string) => void
   // 全請求書を対象にした次番号の採番（同期時のみ。未同期は null）
   fetchNextInvoiceNumber: (base?: Date) => Promise<string | null>
+  // 領収書（台帳）
+  getReceipt: (id: string) => Receipt | undefined
+  addReceipt: (r: Receipt) => Receipt
+  updateReceipt: (r: Receipt) => void
+  deleteReceipt: (id: string) => void
+  // 全領収書を対象にした次番号の採番（同期時のみ。未同期は null）
+  fetchNextReceiptNumber: (base?: Date) => Promise<string | null>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -105,7 +113,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSession(null)
     setSyncEnabled(false)
     // 表示中の他ユーザーデータを消去（設定は残す）
-    setData((d) => ({ ...d, customers: [], invoices: [] }))
+    setData((d) => ({ ...d, customers: [], invoices: [], receipts: [] }))
   }, [])
 
   // GAS連携中かつログイン済みなら、権限に応じたデータを取り込む
@@ -133,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...d,
           customers: remoteState.customers,
           invoices: remoteState.invoices,
+          receipts: remoteState.receipts,
           issuers,
           businessTypes,
         }))
@@ -208,6 +217,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!url || !s) return null
       try {
         return await gasNextInvoiceNumber(
+          url,
+          { email: s.email, pin: s.pin },
+          compactDate(base)
+        )
+      } catch {
+        return null
+      }
+    },
+    []
+  )
+
+  // 全領収書を対象に次の領収書番号を採番（同期時のみ）
+  const fetchNextReceiptNumber = useCallback(
+    async (base: Date = new Date()): Promise<string | null> => {
+      const url = gasRef.current
+      const s = sessionRef.current
+      if (!url || !s) return null
+      try {
+        return await gasNextReceiptNumber(
           url,
           { email: s.email, pin: s.pin },
           compactDate(base)
@@ -316,6 +344,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pushConfig(dataRef.current.issuers, businessTypes)
   }, [])
 
+  const getReceipt = useCallback(
+    (id: string) => data.receipts.find((r) => r.id === id),
+    [data.receipts]
+  )
+
+  const addReceipt = useCallback((r: Receipt): Receipt => {
+    const saved: Receipt = { ...r, id: r.id || newId(), updatedAt: new Date().toISOString() }
+    setData((d) => ({ ...d, receipts: [saved, ...d.receipts] }))
+    push((url, auth) => remote.saveReceipt(url, auth, saved))
+    return saved
+  }, [])
+
+  const updateReceipt = useCallback((r: Receipt) => {
+    const saved: Receipt = { ...r, updatedAt: new Date().toISOString() }
+    setData((d) => ({
+      ...d,
+      receipts: d.receipts.map((x) => (x.id === saved.id ? saved : x)),
+    }))
+    push((url, auth) => remote.saveReceipt(url, auth, saved))
+  }, [])
+
+  const deleteReceipt = useCallback((id: string) => {
+    setData((d) => ({ ...d, receipts: d.receipts.filter((r) => r.id !== id) }))
+    push((url, auth) => remote.deleteReceipt(url, auth, id))
+  }, [])
+
   const value = useMemo<AppContextValue>(
     () => ({
       data,
@@ -341,6 +395,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addBusinessType,
       removeBusinessType,
       fetchNextInvoiceNumber,
+      getReceipt,
+      addReceipt,
+      updateReceipt,
+      deleteReceipt,
+      fetchNextReceiptNumber,
     }),
     [
       data,
@@ -366,6 +425,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addBusinessType,
       removeBusinessType,
       fetchNextInvoiceNumber,
+      getReceipt,
+      addReceipt,
+      updateReceipt,
+      deleteReceipt,
+      fetchNextReceiptNumber,
     ]
   )
 

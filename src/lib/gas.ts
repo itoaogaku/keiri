@@ -1,4 +1,4 @@
-import type { Customer, Invoice, IssuerProfile, UserRole } from '../types'
+import type { Customer, Invoice, IssuerProfile, Receipt, UserRole } from '../types'
 
 // Google Apps Script（スプレッドシートに貼るスクリプト）と通信する薄いクライアント。
 // サーバー不要・鍵不要。GAS のウェブアプリ URL を設定すると同期が有効になる。
@@ -72,6 +72,7 @@ interface StateResult {
   error?: string
   customers?: unknown[]
   invoices?: unknown[]
+  receipts?: unknown[]
   issuers?: IssuerProfile[]
   businessTypes?: string[]
 }
@@ -142,6 +143,33 @@ function normInvoice(inv: Record<string, unknown>): Invoice {
   }
 }
 
+function normReceipt(r: Record<string, unknown>): Receipt {
+  const issuer = (r.issuer && typeof r.issuer === 'object' ? r.issuer : {}) as Record<string, unknown>
+  return {
+    id: str(r.id),
+    receiptNo: str(r.receiptNo),
+    receiptDate: dateStr(r.receiptDate),
+    recipientName: str(r.recipientName),
+    honorific: r.honorific === '様' ? '様' : '御中',
+    exempt: Boolean(r.exempt),
+    subtotal: numOr(r.subtotal),
+    taxTotal: numOr(r.taxTotal),
+    total: numOr(r.total),
+    note: str(r.note),
+    issuer: {
+      ...(issuer as object),
+      id: str(issuer.id),
+      name: str(issuer.name),
+      taxMode: issuer.taxMode === 'exempt' ? 'exempt' : 'taxable',
+    } as Receipt['issuer'],
+    invoiceId: str(r.invoiceId),
+    invoiceNumber: str(r.invoiceNumber),
+    createdAt: str(r.createdAt),
+    updatedAt: str(r.updatedAt),
+    creator: str(r.creator),
+  }
+}
+
 /** 認証付きで、権限に応じたデータ＋共有設定を取得 */
 export async function fetchState(
   url: string,
@@ -149,6 +177,7 @@ export async function fetchState(
 ): Promise<{
   customers: Customer[]
   invoices: Invoice[]
+  receipts: Receipt[]
   issuers: IssuerProfile[]
   businessTypes: string[]
 }> {
@@ -157,6 +186,7 @@ export async function fetchState(
   return {
     customers: (res.customers ?? []).map((c) => normCustomer(c as Record<string, unknown>)),
     invoices: (res.invoices ?? []).map((i) => normInvoice(i as Record<string, unknown>)),
+    receipts: (res.receipts ?? []).map((r) => normReceipt(r as Record<string, unknown>)),
     issuers: Array.isArray(res.issuers) ? res.issuers : [],
     businessTypes: Array.isArray(res.businessTypes) ? res.businessTypes : [],
   }
@@ -185,6 +215,20 @@ export async function nextInvoiceNumber(
   return res.invoiceNumber ?? null
 }
 
+/** 全領収書を対象に、指定日の次の領収書番号を採番（R-YYYYMMDD-XX） */
+export async function nextReceiptNumber(
+  url: string,
+  auth: Auth,
+  datePart: string
+): Promise<string | null> {
+  const res = await post<{ ok?: boolean; receiptNumber?: string }>(url, {
+    action: 'nextReceiptNumber',
+    auth,
+    datePart,
+  })
+  return res.receiptNumber ?? null
+}
+
 export const remote = {
   saveCustomer: (url: string, auth: Auth, customer: Customer) =>
     post(url, { action: 'upsertCustomer', auth, customer }),
@@ -194,4 +238,8 @@ export const remote = {
     post(url, { action: 'upsertInvoice', auth, invoice, customerName }),
   deleteInvoice: (url: string, auth: Auth, id: string) =>
     post(url, { action: 'deleteInvoice', auth, id }),
+  saveReceipt: (url: string, auth: Auth, receipt: Receipt) =>
+    post(url, { action: 'upsertReceipt', auth, receipt }),
+  deleteReceipt: (url: string, auth: Auth, id: string) =>
+    post(url, { action: 'deleteReceipt', auth, id }),
 }
