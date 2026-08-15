@@ -1,6 +1,7 @@
 /** ¥1,234 形式 */
 export function yen(n: number): string {
-  return '¥' + Math.round(n).toLocaleString('ja-JP')
+  const v = Math.round(n)
+  return (v < 0 ? '-¥' : '¥') + Math.abs(v).toLocaleString('ja-JP')
 }
 
 /** YYYY-MM-DD → YYYY年M月D日 */

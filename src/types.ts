@@ -67,6 +67,11 @@ export interface InvoiceItem {
   taxRate: TaxRate
   /** 立替金かどうか（true の場合、消費税を加算せず収益から除外して集計） */
   isReimbursement?: boolean
+  /**
+   * 区分「なし」（true の場合、税込と同じ扱いで消費税を加算しないが、
+   * 区分欄の表記は無記入にする。値引き・調整行などに使用）
+   */
+  noTaxLabel?: boolean
 }
 
 /**

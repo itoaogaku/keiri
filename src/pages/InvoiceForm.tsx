@@ -19,20 +19,22 @@ import {
   type TaxRate,
 } from '../types'
 
-type ItemCategory = '10' | '8' | 'incl' | 'reimb'
+type ItemCategory = '10' | '8' | 'incl' | 'none' | 'reimb'
 
-/** 明細の区分（税率／税込／立替金）を1つの値に集約 */
+/** 明細の区分（税率／税込／なし／立替金）を1つの値に集約 */
 function itemCategory(it: InvoiceItem): ItemCategory {
   if (it.isReimbursement) return 'reimb'
+  if (it.noTaxLabel) return 'none'
   if (it.taxRate === 0) return 'incl'
   return String(it.taxRate) as '10' | '8'
 }
 
-/** 区分の選択値から taxRate と立替金フラグを決める */
+/** 区分の選択値から taxRate・立替金フラグ・なしフラグを決める */
 function categoryPatch(cat: ItemCategory): Partial<InvoiceItem> {
-  if (cat === 'reimb') return { taxRate: 0, isReimbursement: true }
-  if (cat === 'incl') return { taxRate: 0, isReimbursement: false }
-  return { taxRate: Number(cat) as TaxRate, isReimbursement: false }
+  if (cat === 'reimb') return { taxRate: 0, isReimbursement: true, noTaxLabel: false }
+  if (cat === 'none') return { taxRate: 0, isReimbursement: false, noTaxLabel: true }
+  if (cat === 'incl') return { taxRate: 0, isReimbursement: false, noTaxLabel: false }
+  return { taxRate: Number(cat) as TaxRate, isReimbursement: false, noTaxLabel: false }
 }
 
 export default function InvoiceForm() {
@@ -354,7 +356,6 @@ export default function InvoiceForm() {
                     <td className="py-1 pr-2">
                       <input
                         type="number"
-                        min={0}
                         className={`${inputCls} text-right`}
                         value={it.unitPrice}
                         onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) })}
@@ -371,6 +372,7 @@ export default function InvoiceForm() {
                         <option value="10">10%</option>
                         <option value="8">8%</option>
                         <option value="incl">税込</option>
+                        <option value="none">なし</option>
                         <option value="reimb">立替金</option>
                       </select>
                     </td>

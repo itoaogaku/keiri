@@ -102,6 +102,7 @@ function normItem(it: Record<string, unknown>): Record<string, unknown> {
     unitPrice: numOr(it.unitPrice),
     taxRate: rate === 0 || rate === 8 || rate === 10 ? rate : 10,
     isReimbursement: Boolean(it.isReimbursement),
+    noTaxLabel: Boolean(it.noTaxLabel),
   }
 }
 
