@@ -314,6 +314,7 @@ export default function InvoiceForm() {
             <table className="w-full text-sm">
               <thead className="text-left text-xs font-medium text-slate-500">
                 <tr>
+                  <th className="pb-2 w-36">取引年月日</th>
                   <th className="pb-2">品目名</th>
                   <th className="pb-2 w-20 text-right">数量</th>
                   <th className="pb-2 w-32 text-right">単価</th>
@@ -325,6 +326,14 @@ export default function InvoiceForm() {
               <tbody>
                 {form.items.map((it) => (
                   <tr key={it.id}>
+                    <td className="py-1 pr-2">
+                      <input
+                        className={inputCls}
+                        placeholder="任意：2026/7/1 や 7/1〜7/31"
+                        value={it.transactionDate ?? ''}
+                        onChange={(e) => updateItem(it.id, { transactionDate: e.target.value })}
+                      />
+                    </td>
                     <td className="py-1 pr-2">
                       <input
                         className={inputCls}

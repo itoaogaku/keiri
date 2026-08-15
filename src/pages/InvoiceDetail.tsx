@@ -76,6 +76,8 @@ export default function InvoiceDetail() {
   const t = computeTotals(inv.items, inv.issuer.taxMode)
   const exempt = inv.issuer.taxMode === 'exempt'
   const seal = processedSeal ?? rawSeal
+  // どの明細にも取引年月日が未入力なら、列ごと非表示にして従来の見た目を保つ
+  const hasTransactionDates = inv.items.some((it) => it.transactionDate?.trim())
 
   // PDF保存時の初期ファイル名を「請求書番号_請求先敬称」にする。
   // ブラウザは <title> を既定のファイル名に使うため、印刷直前だけ差し替える。
@@ -240,6 +242,7 @@ export default function InvoiceDetail() {
         <table className="mt-8 w-full text-sm">
           <thead>
             <tr className="border-b-2 border-slate-300 text-left text-slate-500">
+              {hasTransactionDates && <th className="py-2">取引年月日</th>}
               <th className="py-2">品目</th>
               <th className="py-2 text-right">数量</th>
               <th className="py-2 text-right">単価</th>
@@ -250,6 +253,9 @@ export default function InvoiceDetail() {
           <tbody>
             {inv.items.map((it) => (
               <tr key={it.id} className="border-b border-slate-100">
+                {hasTransactionDates && (
+                  <td className="py-2 text-slate-600">{it.transactionDate || '—'}</td>
+                )}
                 <td className="py-2 text-slate-800">{it.name || '—'}</td>
                 <td className="py-2 text-right text-slate-600">{it.quantity.toLocaleString()}</td>
                 <td className="py-2 text-right text-slate-600">{yen(it.unitPrice)}</td>

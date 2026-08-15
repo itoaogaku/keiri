@@ -59,6 +59,8 @@ export interface Customer {
 /** 明細行 */
 export interface InvoiceItem {
   id: string
+  /** 取引年月日（商品・サービスを実際に売買した日付。期間の場合はテキストで自由記述）。未入力可 */
+  transactionDate?: string
   name: string
   quantity: number
   unitPrice: number

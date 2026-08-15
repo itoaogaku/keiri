@@ -96,6 +96,7 @@ function normItem(it: Record<string, unknown>): Record<string, unknown> {
   const rate = numOr(it.taxRate, 10)
   return {
     id: str(it.id) || Math.random().toString(36).slice(2, 8),
+    transactionDate: str(it.transactionDate),
     name: str(it.name),
     quantity: numOr(it.quantity),
     unitPrice: numOr(it.unitPrice),
