@@ -23,11 +23,8 @@ function bankLines(issuer: IssuerProfile): string[] {
   const lines: string[] = []
   if (issuer.bankName) lines.push(`銀行名：${issuer.bankName}`)
   if (issuer.branchName) lines.push(`支店名：${issuer.branchName}`)
-  if (issuer.accountNumber) {
-    lines.push(`${issuer.accountType || '普通'}：${issuer.accountNumber}`)
-  } else if (issuer.accountType) {
-    lines.push(issuer.accountType)
-  }
+  if (issuer.accountType) lines.push(`種類：${issuer.accountType}`)
+  if (issuer.accountNumber) lines.push(`口座番号：${issuer.accountNumber}`)
   if (issuer.accountHolder) lines.push(`口座名：${issuer.accountHolder}`)
   // 旧データ（1行テキスト）しか無い場合はそれを表示
   if (lines.length === 0 && issuer.bankInfo) lines.push(issuer.bankInfo)
