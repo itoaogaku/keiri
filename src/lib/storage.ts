@@ -52,6 +52,7 @@ function seedData(): AppData {
     customers: [],
     invoices: [],
     receipts: [],
+    quotations: [],
     issuers: DEFAULT_ISSUERS,
     businessTypes: DEFAULT_BUSINESS_TYPES,
   }
@@ -87,6 +88,10 @@ export function loadData(): AppData {
       // 領収書配列が無い旧データを補完
       if (!parsed.receipts) {
         parsed.receipts = []
+      }
+      // 見積書配列が無い旧データを補完
+      if (!parsed.quotations) {
+        parsed.quotations = []
       }
       return parsed
     }

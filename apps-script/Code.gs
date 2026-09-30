@@ -23,6 +23,7 @@
 
 const CUSTOMERS = '顧客'
 const INVOICES = '請求書'
+const QUOTATIONS = '見積書'
 const RECEIPTS = '領収書'
 const USERS = 'ユーザー'
 
@@ -33,6 +34,11 @@ const INVOICE_HEADERS = [
   '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
   '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称', '事業種別', '作成者',
   '立替金以外', '立替金',
+]
+const QUOTATION_HEADERS = [
+  'id', '見積書番号', '発行日', '有効期限', 'ステータス', '請求者', '課税区分',
+  '顧客ID', '顧客名', '小計', '消費税', '合計', '登録番号',
+  '明細JSON', '請求者JSON', '備考', '作成日時', '更新日時', '敬称', '事業種別', '作成者',
 ]
 const RECEIPT_HEADERS = [
   'id', '領収書番号', '領収日', '宛名', '敬称', '請求者', '課税区分',
@@ -53,6 +59,7 @@ const ISSUER_VIEW_HEADERS = ['事業種別', '請求書番号', '顧客名', '�
 // 「作成者」列の位置（0始まり）
 const CUSTOMER_CREATOR_IDX = 6
 const INVOICE_CREATOR_IDX = 20
+const QUOTATION_CREATOR_IDX = 20
 const RECEIPT_CREATOR_IDX = 16
 
 const STATUS_LABELS = {
@@ -61,6 +68,13 @@ const STATUS_LABELS = {
 }
 const STATUS_KEYS = {}
 Object.keys(STATUS_LABELS).forEach(function (k) { STATUS_KEYS[STATUS_LABELS[k]] = k })
+
+const QUOTATION_STATUS_LABELS = {
+  draft: '下書き', sent: '提示済み', accepted: '承諾',
+  declined: '失注', expired: '期限切れ',
+}
+const QUOTATION_STATUS_KEYS = {}
+Object.keys(QUOTATION_STATUS_LABELS).forEach(function (k) { QUOTATION_STATUS_KEYS[QUOTATION_STATUS_LABELS[k]] = k })
 
 function ss() { return SpreadsheetApp.getActiveSpreadsheet() }
 
@@ -91,9 +105,10 @@ function jsonOut(obj) {
 function setup() {
   getSheet(CUSTOMERS, CUSTOMER_HEADERS)
   getSheet(INVOICES, INVOICE_HEADERS)
+  getSheet(QUOTATIONS, QUOTATION_HEADERS)
   getSheet(RECEIPTS, RECEIPT_HEADERS)
   getSheet(USERS, USER_HEADERS)
-  Logger.log('セットアップ完了：顧客・請求書・領収書・ユーザーの各シートを用意しました。')
+  Logger.log('セットアップ完了：顧客・請求書・見積書・領収書・ユーザーの各シートを用意しました。')
 }
 
 // ================= 認証 =================
@@ -186,6 +201,21 @@ function nextReceiptNumber(datePart) {
   return prefix + String(max + 1).padStart(2, '0')
 }
 
+/** 全見積書を対象に、指定日(YYYYMMDD)の次の見積書番号を採番する（Q-YYYYMMDD-XX） */
+function nextQuotationNumber(datePart) {
+  const rows = readAll(getSheet(QUOTATIONS, QUOTATION_HEADERS))
+  const prefix = 'Q-' + datePart + '-'
+  let max = 0
+  rows.forEach(function (r) {
+    const num = String(r[1])
+    if (num.indexOf(prefix) === 0) {
+      const seq = parseInt(num.slice(prefix.length), 10)
+      if (!isNaN(seq) && seq > max) max = seq
+    }
+  })
+  return prefix + String(max + 1).padStart(2, '0')
+}
+
 // ================= HTTP ハンドラ =================
 
 function doGet() {
@@ -216,6 +246,8 @@ function doPost(e) {
         return jsonOut({ ok: true, invoiceNumber: nextInvoiceNumber(String(body.datePart)) })
       case 'nextReceiptNumber':
         return jsonOut({ ok: true, receiptNumber: nextReceiptNumber(String(body.datePart)) })
+      case 'nextQuotationNumber':
+        return jsonOut({ ok: true, quotationNumber: nextQuotationNumber(String(body.datePart)) })
       case 'saveConfig':
         if (!user.isOwner) return jsonOut({ ok: false, error: 'forbidden' })
         writeConfig(body.config)
@@ -245,6 +277,12 @@ function doPost(e) {
         return jsonOut({ ok: true })
       case 'deleteReceipt':
         deleteEntity(user, RECEIPTS, RECEIPT_HEADERS, RECEIPT_CREATOR_IDX, body.id)
+        return jsonOut({ ok: true })
+      case 'upsertQuotation':
+        upsertQuotation(user, body.quotation, body.customerName)
+        return jsonOut({ ok: true })
+      case 'deleteQuotation':
+        deleteEntity(user, QUOTATIONS, QUOTATION_HEADERS, QUOTATION_CREATOR_IDX, body.id)
         return jsonOut({ ok: true })
     }
     return jsonOut({ ok: false, error: 'unknown action' })
@@ -516,6 +554,35 @@ function upsertInvoice(user, inv, customerName) {
   writeWithGuard(user, sh, inv.id, base, INVOICE_CREATOR_IDX)
 }
 
+/** 顧客IDから企業名を引く（見つからなければ空文字） */
+function lookupCustomerName(customerId) {
+  if (!customerId) return ''
+  const sh = getSheet(CUSTOMERS, CUSTOMER_HEADERS)
+  const r = findRow(sh, customerId)
+  if (r === -1) return ''
+  return String(sh.getRange(r, 2).getValue() || '')
+}
+
+function upsertQuotation(user, q, customerName) {
+  const sh = getSheet(QUOTATIONS, QUOTATION_HEADERS)
+  const t = computeTotals(q.items, q.issuer && q.issuer.taxMode)
+  const base = [
+    q.id, q.quotationNumber, q.issueDate, q.validUntil,
+    QUOTATION_STATUS_LABELS[q.status] || q.status,
+    (q.issuer && q.issuer.name) || '',
+    q.issuer && q.issuer.taxMode === 'exempt' ? '非課税' : '課税',
+    q.customerId, customerName || lookupCustomerName(q.customerId),
+    t.subtotal, t.taxTotal, t.total,
+    (q.issuer && q.issuer.registrationNumber) || '',
+    JSON.stringify(q.items), JSON.stringify(q.issuer || {}),
+    q.notes || '', q.createdAt || '', q.updatedAt || '',
+    q.honorific || '御中',
+    q.businessType || '',
+    '', // 作成者（writeWithGuard が設定）
+  ]
+  writeWithGuard(user, sh, q.id, base, QUOTATION_CREATOR_IDX)
+}
+
 function upsertReceipt(user, rc) {
   const sh = getSheet(RECEIPTS, RECEIPT_HEADERS)
   const issuer = rc.issuer || {}
@@ -578,6 +645,30 @@ function getStateFor(user) {
     return String(b.createdAt).localeCompare(String(a.createdAt))
   })
 
+  const quoRows = readAll(getSheet(QUOTATIONS, QUOTATION_HEADERS))
+  const quotations = quoRows
+    .filter(function (r) { return r[0] })
+    .filter(function (r) { return user.isOwner || normEmail(r[QUOTATION_CREATOR_IDX]) === em })
+    .map(function (r) {
+      const issuer = safeParse(r[14], {})
+      return {
+        id: String(r[0]), quotationNumber: String(r[1]),
+        issueDate: toYmd(r[2]), validUntil: toYmd(r[3]),
+        status: QUOTATION_STATUS_KEYS[r[4]] || 'draft',
+        customerId: String(r[7]), issuerId: issuer.id || '', issuer: issuer,
+        items: safeParse(r[13], []),
+        notes: String(r[15] == null ? '' : r[15]),
+        createdAt: String(r[16] == null ? '' : r[16]),
+        updatedAt: String(r[17] == null ? '' : r[17]),
+        honorific: r[18] || '御中',
+        businessType: String(r[19] == null ? '' : r[19]),
+        creator: String(r[QUOTATION_CREATOR_IDX] == null ? '' : r[QUOTATION_CREATOR_IDX]),
+      }
+    })
+  quotations.sort(function (a, b) {
+    return String(b.createdAt).localeCompare(String(a.createdAt))
+  })
+
   const rcRows = readAll(getSheet(RECEIPTS, RECEIPT_HEADERS))
   const receipts = rcRows
     .filter(function (r) { return r[0] })
@@ -603,6 +694,7 @@ function getStateFor(user) {
     ok: true,
     customers: customers,
     invoices: invoices,
+    quotations: quotations,
     receipts: receipts,
     issuers: config.issuers,
     businessTypes: config.businessTypes,

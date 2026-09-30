@@ -4,6 +4,9 @@ import Dashboard from './pages/Dashboard'
 import InvoiceList from './pages/InvoiceList'
 import InvoiceForm from './pages/InvoiceForm'
 import InvoiceDetail from './pages/InvoiceDetail'
+import QuotationList from './pages/QuotationList'
+import QuotationForm from './pages/QuotationForm'
+import QuotationDetail from './pages/QuotationDetail'
 import ReceiptView from './pages/ReceiptView'
 import StandaloneReceipt from './pages/StandaloneReceipt'
 import ReceiptList from './pages/ReceiptList'
@@ -26,6 +29,10 @@ export default function App() {
         <Route path="/invoices/:id" element={<InvoiceDetail />} />
         <Route path="/invoices/:id/edit" element={<InvoiceForm />} />
         <Route path="/invoices/:id/receipt" element={<ReceiptView />} />
+        <Route path="/quotations" element={<QuotationList />} />
+        <Route path="/quotations/new" element={<QuotationForm />} />
+        <Route path="/quotations/:id" element={<QuotationDetail />} />
+        <Route path="/quotations/:id/edit" element={<QuotationForm />} />
         <Route path="/receipts" element={<ReceiptList />} />
         <Route path="/receipts/new" element={<StandaloneReceipt />} />
         <Route path="/receipts/:id" element={<SavedReceiptView />} />

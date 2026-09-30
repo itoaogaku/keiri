@@ -5,6 +5,7 @@ import {
   copyInvoice,
   createBlankInvoice,
   newId,
+  quotationToInvoiceDraft,
   snapshotIssuer,
 } from '../lib/invoice'
 import { computeTotals, lineNet } from '../lib/calc'
@@ -41,17 +42,27 @@ export default function InvoiceForm() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const copyFromId = searchParams.get('copyFrom')
+  const fromQuotationId = searchParams.get('fromQuotation')
   const navigate = useNavigate()
-  const { data, session, getInvoice, addInvoice, updateInvoice, addBusinessType, fetchNextInvoiceNumber } =
-    useApp()
+  const {
+    data,
+    session,
+    getInvoice,
+    addInvoice,
+    updateInvoice,
+    addBusinessType,
+    fetchNextInvoiceNumber,
+    getQuotation,
+  } = useApp()
   const isOwner = !session || session.role === 'owner'
 
   const isEdit = Boolean(id)
 
   // フォームの初期値を決定する。
-  //  1) 編集       : 既存請求書をそのまま読み込む
-  //  2) copyFrom付き: ★ copyInvoice() で複製ドラフトを生成（採番・日付を再生成）
-  //  3) 通常の新規  : 空ドラフト
+  //  1) 編集         : 既存請求書をそのまま読み込む
+  //  2) copyFrom付き  : ★ copyInvoice() で複製ドラフトを生成（採番・日付を再生成）
+  //  3) fromQuotation付き: 見積書からドラフトを生成（見積 → 請求への変換）
+  //  4) 通常の新規    : 空ドラフト
   const initial = useMemo<Invoice>(() => {
     if (isEdit && id) {
       const existing = getInvoice(id)
@@ -61,13 +72,17 @@ export default function InvoiceForm() {
       const src = getInvoice(copyFromId)
       if (src) return copyInvoice(src, data.invoices)
     }
+    if (fromQuotationId) {
+      const src = getQuotation(fromQuotationId)
+      if (src) return quotationToInvoiceDraft(src, data.invoices)
+    }
     return createBlankInvoice(data.invoices, data.issuers[0])
     // 初回マウント時のみ算出（以降の入力で再生成させない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const [form, setForm] = useState<Invoice>(initial)
-  const [copiedNotice, setCopiedNotice] = useState(Boolean(copyFromId))
+  const [copiedNotice, setCopiedNotice] = useState(Boolean(copyFromId || fromQuotationId))
 
   useEffect(() => {
     if (copiedNotice) {
@@ -160,7 +175,10 @@ export default function InvoiceForm() {
           </h1>
           {copiedNotice && (
             <div className="mt-1 text-sm text-indigo-600">
-              📋 過去の請求書からコピーしました。番号・日付は自動更新済みです。
+              📋{' '}
+              {fromQuotationId
+                ? '見積書から請求書を作成しました。番号・日付は自動更新済みです。'
+                : '過去の請求書からコピーしました。番号・日付は自動更新済みです。'}
             </div>
           )}
         </div>

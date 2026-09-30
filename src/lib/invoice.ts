@@ -1,4 +1,4 @@
-import type { Invoice, InvoiceItem, IssuerProfile } from '../types'
+import type { Invoice, InvoiceItem, IssuerProfile, Quotation } from '../types'
 import { compactDate, endOfNextMonth, toISODate } from './format'
 
 /** 簡易ユニークID */
@@ -95,6 +95,35 @@ export function copyInvoice(
     issuer: snapshotIssuer(src.issuer), // 請求者スナップショットを引き継ぐ（角印除く）
     items: src.items.map((it) => ({ ...it, id: newId() })), // 明細をディープコピー
     notes: src.notes, // 備考を引き継ぐ
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }
+}
+
+/**
+ * 見積書から請求書ドラフトを作る（見積 → 請求への変換）。
+ * 引き継ぐ: 顧客・明細・備考・請求元・事業種別・敬称。
+ * 再生成: 請求書番号・発行日(当日)・支払期限(翌月末)・ステータス(下書き)・id。
+ */
+export function quotationToInvoiceDraft(
+  src: Quotation,
+  allInvoices: Invoice[],
+  base: Date = new Date()
+): Invoice {
+  const nowIso = new Date().toISOString()
+  return {
+    id: '',
+    invoiceNumber: generateInvoiceNumber(allInvoices, base),
+    issueDate: toISODate(base),
+    dueDate: endOfNextMonth(base),
+    status: 'draft',
+    customerId: src.customerId,
+    businessType: src.businessType ?? '',
+    honorific: src.honorific ?? '御中',
+    issuerId: src.issuerId,
+    issuer: snapshotIssuer(src.issuer),
+    items: src.items.map((it) => ({ ...it, id: newId() })),
+    notes: src.notes,
     createdAt: nowIso,
     updatedAt: nowIso,
   }

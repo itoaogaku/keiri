@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AppData, Customer, Invoice, IssuerProfile, Receipt, Session } from '../types'
+import type { AppData, Customer, Invoice, IssuerProfile, Quotation, Receipt, Session } from '../types'
 import { loadData, saveData } from '../lib/storage'
 import { newId } from '../lib/invoice'
 import {
@@ -19,6 +19,7 @@ import {
   saveConfig as gasSaveConfig,
   nextInvoiceNumber as gasNextInvoiceNumber,
   nextReceiptNumber as gasNextReceiptNumber,
+  nextQuotationNumber as gasNextQuotationNumber,
   mergeCustomers as gasMergeCustomers,
   remote,
   type Auth,
@@ -79,6 +80,13 @@ interface AppContextValue {
   deleteReceipt: (id: string) => void
   // 全領収書を対象にした次番号の採番（同期時のみ。未同期は null）
   fetchNextReceiptNumber: (base?: Date) => Promise<string | null>
+  // 見積書
+  getQuotation: (id: string) => Quotation | undefined
+  addQuotation: (q: Quotation) => Quotation
+  updateQuotation: (q: Quotation) => void
+  deleteQuotation: (id: string) => void
+  // 全見積書を対象にした次番号の採番（同期時のみ。未同期は null）
+  fetchNextQuotationNumber: (base?: Date) => Promise<string | null>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -116,7 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSession(null)
     setSyncEnabled(false)
     // 表示中の他ユーザーデータを消去（設定は残す）
-    setData((d) => ({ ...d, customers: [], invoices: [], receipts: [] }))
+    setData((d) => ({ ...d, customers: [], invoices: [], receipts: [], quotations: [] }))
   }, [])
 
   // GAS連携中かつログイン済みなら、権限に応じたデータを取り込む
@@ -145,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           customers: remoteState.customers,
           invoices: remoteState.invoices,
           receipts: remoteState.receipts,
+          quotations: remoteState.quotations,
           issuers,
           businessTypes,
         }))
@@ -239,6 +248,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!url || !s) return null
       try {
         return await gasNextReceiptNumber(
+          url,
+          { email: s.email, pin: s.pin },
+          compactDate(base)
+        )
+      } catch {
+        return null
+      }
+    },
+    []
+  )
+
+  // 全見積書を対象に次の見積書番号を採番（同期時のみ）
+  const fetchNextQuotationNumber = useCallback(
+    async (base: Date = new Date()): Promise<string | null> => {
+      const url = gasRef.current
+      const s = sessionRef.current
+      if (!url || !s) return null
+      try {
+        return await gasNextQuotationNumber(
           url,
           { email: s.email, pin: s.pin },
           compactDate(base)
@@ -355,6 +383,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         customers: remoteState.customers,
         invoices: remoteState.invoices,
         receipts: remoteState.receipts,
+        quotations: remoteState.quotations,
         issuers,
         businessTypes,
       }))
@@ -443,6 +472,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     push((url, auth) => remote.deleteReceipt(url, auth, id))
   }, [])
 
+  const getQuotation = useCallback(
+    (id: string) => data.quotations.find((q) => q.id === id),
+    [data.quotations]
+  )
+
+  const addQuotation = useCallback((q: Quotation): Quotation => {
+    const saved: Quotation = {
+      ...q,
+      id: q.id || newId(),
+      updatedAt: new Date().toISOString(),
+    }
+    setData((d) => ({ ...d, quotations: [saved, ...d.quotations] }))
+    push((url, auth) => remote.saveQuotation(url, auth, saved))
+    return saved
+  }, [])
+
+  const updateQuotation = useCallback((q: Quotation) => {
+    const saved: Quotation = { ...q, updatedAt: new Date().toISOString() }
+    setData((d) => ({
+      ...d,
+      quotations: d.quotations.map((x) => (x.id === saved.id ? saved : x)),
+    }))
+    push((url, auth) => remote.saveQuotation(url, auth, saved))
+  }, [])
+
+  const deleteQuotation = useCallback((id: string) => {
+    setData((d) => ({ ...d, quotations: d.quotations.filter((q) => q.id !== id) }))
+    push((url, auth) => remote.deleteQuotation(url, auth, id))
+  }, [])
+
   const value = useMemo<AppContextValue>(
     () => ({
       data,
@@ -474,6 +533,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateReceipt,
       deleteReceipt,
       fetchNextReceiptNumber,
+      getQuotation,
+      addQuotation,
+      updateQuotation,
+      deleteQuotation,
+      fetchNextQuotationNumber,
     }),
     [
       data,
@@ -505,6 +569,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateReceipt,
       deleteReceipt,
       fetchNextReceiptNumber,
+      getQuotation,
+      addQuotation,
+      updateQuotation,
+      deleteQuotation,
+      fetchNextQuotationNumber,
     ]
   )
 

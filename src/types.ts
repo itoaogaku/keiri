@@ -32,6 +32,22 @@ export const STATUS_LABELS: Record<InvoiceStatus, string> = {
   overdue: '延滞',
 }
 
+/** 見積書ステータス */
+export type QuotationStatus =
+  | 'draft' // 下書き
+  | 'sent' // 提示済み
+  | 'accepted' // 承諾
+  | 'declined' // 失注
+  | 'expired' // 期限切れ
+
+export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {
+  draft: '下書き',
+  sent: '提示済み',
+  accepted: '承諾',
+  declined: '失注',
+  expired: '期限切れ',
+}
+
 /** 権限ロール */
 export type UserRole = 'owner' | 'restricted'
 
@@ -139,6 +155,30 @@ export interface Invoice {
   creator?: string
 }
 
+/** 見積書 */
+export interface Quotation {
+  id: string
+  quotationNumber: string
+  issueDate: string // YYYY-MM-DD
+  validUntil: string // YYYY-MM-DD（見積有効期限）
+  status: QuotationStatus
+  customerId: string
+  /** 事業種別（売上分析用の分類。選択肢は編集可能） */
+  businessType: string
+  /** 宛名の敬称（御中／様。既定は御中） */
+  honorific: Honorific
+  /** 使用した請求者プロファイルのID */
+  issuerId: string
+  /** 発行時点の請求者スナップショット（後から設定変更されても過去分は不変） */
+  issuer: IssuerProfile
+  items: InvoiceItem[]
+  notes: string
+  createdAt: string
+  updatedAt: string
+  /** 作成者メール（GASが付与。閲覧制御に使用） */
+  creator?: string
+}
+
 /** 請求元スナップショット（角印を除く。領収書に埋め込む） */
 export type ReceiptIssuer = Omit<IssuerProfile, 'sealImage'>
 
@@ -169,6 +209,7 @@ export interface AppData {
   customers: Customer[]
   invoices: Invoice[]
   receipts: Receipt[]
+  quotations: Quotation[]
   /** 使い分け可能な請求者プロファイル一覧 */
   issuers: IssuerProfile[]
   /** 事業種別の選択肢（ユーザーが追加・削除できる） */

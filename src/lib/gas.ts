@@ -1,4 +1,4 @@
-import type { Customer, Invoice, IssuerProfile, Receipt, UserRole } from '../types'
+import type { Customer, Invoice, IssuerProfile, Quotation, Receipt, UserRole } from '../types'
 
 // Google Apps Script（スプレッドシートに貼るスクリプト）と通信する薄いクライアント。
 // サーバー不要・鍵不要。GAS のウェブアプリ URL を設定すると同期が有効になる。
@@ -73,6 +73,7 @@ interface StateResult {
   customers?: unknown[]
   invoices?: unknown[]
   receipts?: unknown[]
+  quotations?: unknown[]
   issuers?: IssuerProfile[]
   businessTypes?: string[]
 }
@@ -172,6 +173,33 @@ function normReceipt(r: Record<string, unknown>): Receipt {
   }
 }
 
+function normQuotation(q: Record<string, unknown>): Quotation {
+  const issuer = (q.issuer && typeof q.issuer === 'object' ? q.issuer : {}) as Record<string, unknown>
+  const items = Array.isArray(q.items) ? q.items : []
+  return {
+    id: str(q.id),
+    quotationNumber: str(q.quotationNumber),
+    issueDate: dateStr(q.issueDate),
+    validUntil: dateStr(q.validUntil),
+    status: (str(q.status) || 'draft') as Quotation['status'],
+    customerId: str(q.customerId),
+    businessType: str(q.businessType),
+    honorific: q.honorific === '様' ? '様' : '御中',
+    issuerId: str(q.issuerId),
+    issuer: {
+      ...(issuer as object),
+      id: str(issuer.id),
+      name: str(issuer.name),
+      taxMode: issuer.taxMode === 'exempt' ? 'exempt' : 'taxable',
+    } as Quotation['issuer'],
+    items: items.map((it) => normItem(it as Record<string, unknown>)) as unknown as Quotation['items'],
+    notes: str(q.notes),
+    createdAt: str(q.createdAt),
+    updatedAt: str(q.updatedAt),
+    creator: str(q.creator),
+  }
+}
+
 /** 認証付きで、権限に応じたデータ＋共有設定を取得 */
 export async function fetchState(
   url: string,
@@ -180,6 +208,7 @@ export async function fetchState(
   customers: Customer[]
   invoices: Invoice[]
   receipts: Receipt[]
+  quotations: Quotation[]
   issuers: IssuerProfile[]
   businessTypes: string[]
 }> {
@@ -189,6 +218,7 @@ export async function fetchState(
     customers: (res.customers ?? []).map((c) => normCustomer(c as Record<string, unknown>)),
     invoices: (res.invoices ?? []).map((i) => normInvoice(i as Record<string, unknown>)),
     receipts: (res.receipts ?? []).map((r) => normReceipt(r as Record<string, unknown>)),
+    quotations: (res.quotations ?? []).map((q) => normQuotation(q as Record<string, unknown>)),
     issuers: Array.isArray(res.issuers) ? res.issuers : [],
     businessTypes: Array.isArray(res.businessTypes) ? res.businessTypes : [],
   }
@@ -231,6 +261,20 @@ export async function nextReceiptNumber(
   return res.receiptNumber ?? null
 }
 
+/** 全見積書を対象に、指定日の次の見積書番号を採番（Q-YYYYMMDD-XX） */
+export async function nextQuotationNumber(
+  url: string,
+  auth: Auth,
+  datePart: string
+): Promise<string | null> {
+  const res = await post<{ ok?: boolean; quotationNumber?: string }>(url, {
+    action: 'nextQuotationNumber',
+    auth,
+    datePart,
+  })
+  return res.quotationNumber ?? null
+}
+
 /**
  * 重複顧客（企業名が同じ）を1件に統合する（オーナーのみ）。
  * 戻り値は統合（削除）した件数。
@@ -259,4 +303,8 @@ export const remote = {
     post(url, { action: 'upsertReceipt', auth, receipt }),
   deleteReceipt: (url: string, auth: Auth, id: string) =>
     post(url, { action: 'deleteReceipt', auth, id }),
+  saveQuotation: (url: string, auth: Auth, quotation: Quotation) =>
+    post(url, { action: 'upsertQuotation', auth, quotation }),
+  deleteQuotation: (url: string, auth: Auth, id: string) =>
+    post(url, { action: 'deleteQuotation', auth, id }),
 }
