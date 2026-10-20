@@ -61,6 +61,7 @@ export default function SavedReceiptView() {
     total: r.total,
     exempt: r.exempt,
     taxLines,
+    items: r.items,
   }
 
   return (

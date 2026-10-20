@@ -43,7 +43,7 @@ const QUOTATION_HEADERS = [
 const RECEIPT_HEADERS = [
   'id', '領収書番号', '領収日', '宛名', '敬称', '請求者', '課税区分',
   '小計', '消費税', '合計', '但し書き', '請求者JSON', '請求書ID', '請求書番号',
-  '作成日時', '更新日時', '作成者',
+  '作成日時', '更新日時', '作成者', '明細JSON',
 ]
 const USER_HEADERS = ['メール', '名前', 'PIN', '役割']
 
@@ -597,6 +597,7 @@ function upsertReceipt(user, rc) {
     rc.invoiceId || '', rc.invoiceNumber || '',
     rc.createdAt || '', rc.updatedAt || '',
     '', // 作成者（writeWithGuard が設定）
+    JSON.stringify(rc.items || []),
   ]
   writeWithGuard(user, sh, rc.id, base, RECEIPT_CREATOR_IDX)
 }
@@ -683,6 +684,7 @@ function getStateFor(user) {
         invoiceId: String(r[12] || ''), invoiceNumber: String(r[13] || ''),
         createdAt: String(r[14] || ''), updatedAt: String(r[15] || ''),
         creator: String(r[RECEIPT_CREATOR_IDX] || ''),
+        items: safeParse(r[17], []),
       }
     })
   receipts.sort(function (a, b) {

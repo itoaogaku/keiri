@@ -182,6 +182,14 @@ export interface Quotation {
 /** 請求元スナップショット（角印を除く。領収書に埋め込む） */
 export type ReceiptIssuer = Omit<IssuerProfile, 'sealImage'>
 
+/** 領収書の品目行（単独発行向け。品名と金額のみのシンプルな構成） */
+export interface ReceiptItem {
+  id: string
+  name: string
+  /** 金額（税込）。品目ごとの内訳として合計に積み上げる */
+  amount: number
+}
+
 /** 領収書（請求書に紐づく発行分・単独発行分の両方を保持） */
 export interface Receipt {
   id: string
@@ -195,6 +203,8 @@ export interface Receipt {
   total: number
   note: string
   issuer: ReceiptIssuer
+  /** 品目の内訳（単独発行時に入力。請求書発行分は空の場合あり） */
+  items?: ReceiptItem[]
   /** 元になった請求書（単独発行の場合は空） */
   invoiceId?: string
   invoiceNumber?: string

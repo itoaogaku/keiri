@@ -165,6 +165,10 @@ function normReceipt(r: Record<string, unknown>): Receipt {
       name: str(issuer.name),
       taxMode: issuer.taxMode === 'exempt' ? 'exempt' : 'taxable',
     } as Receipt['issuer'],
+    items: (Array.isArray(r.items) ? r.items : []).map((it) => {
+      const item = it as Record<string, unknown>
+      return { id: str(item.id) || Math.random().toString(36).slice(2, 8), name: str(item.name), amount: numOr(item.amount) }
+    }),
     invoiceId: str(r.invoiceId),
     invoiceNumber: str(r.invoiceNumber),
     createdAt: str(r.createdAt),

@@ -6,6 +6,12 @@ export interface ReceiptTaxLine {
   tax: number
 }
 
+export interface ReceiptLineItem {
+  id: string
+  name: string
+  amount: number
+}
+
 export interface ReceiptData {
   receiptNo: string
   receiptDate: string // YYYY-MM-DD
@@ -22,11 +28,14 @@ export interface ReceiptData {
   total: number
   exempt: boolean
   taxLines: ReceiptTaxLine[]
+  /** 品目の内訳（品名未入力・金額0の行は表示しない） */
+  items?: ReceiptLineItem[]
 }
 
 /** A4 領収書のプレビュー／印刷本体（請求書発行・単独発行で共用） */
 export default function ReceiptDocument({ data }: { data: ReceiptData }) {
   const needStamp = data.total >= 50000
+  const visibleItems = (data.items ?? []).filter((it) => it.name.trim() || it.amount !== 0)
 
   return (
     <div className="print-area mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-10 shadow-sm">
@@ -56,6 +65,26 @@ export default function ReceiptDocument({ data }: { data: ReceiptData }) {
 
       <div className="mt-4 text-sm text-slate-700">但し {data.note}</div>
       <div className="mt-1 text-sm text-slate-700">上記正に領収いたしました。</div>
+
+      {/* 品目の内訳 */}
+      {visibleItems.length > 0 && (
+        <table className="mt-6 w-full max-w-md text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-300 text-left text-slate-500">
+              <th className="py-1.5">品目</th>
+              <th className="py-1.5 text-right">金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleItems.map((it) => (
+              <tr key={it.id} className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-800">{it.name || '—'}</td>
+                <td className="py-1.5 text-right text-slate-800">{yen(it.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {/* 収入印紙欄 ＋ 内訳 */}
       <div className="mt-6 flex justify-between">
