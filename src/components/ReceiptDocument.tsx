@@ -34,7 +34,6 @@ export interface ReceiptData {
 
 /** A4 領収書のプレビュー／印刷本体（請求書発行・単独発行で共用） */
 export default function ReceiptDocument({ data }: { data: ReceiptData }) {
-  const needStamp = data.total >= 50000
   const visibleItems = (data.items ?? []).filter((it) => it.name.trim() || it.amount !== 0)
 
   return (
@@ -86,16 +85,8 @@ export default function ReceiptDocument({ data }: { data: ReceiptData }) {
         </table>
       )}
 
-      {/* 収入印紙欄 ＋ 内訳 */}
-      <div className="mt-6 flex justify-between">
-        <div className="flex items-end">
-          {needStamp && (
-            <div className="flex h-24 w-24 items-center justify-center rounded border border-dashed border-slate-400 text-center text-xs text-slate-400">
-              収入印紙
-            </div>
-          )}
-        </div>
-
+      {/* 内訳 */}
+      <div className="mt-6 flex justify-end">
         <div className="w-72 space-y-1.5 text-sm">
           <div className="flex justify-between text-slate-600">
             <span>{data.exempt ? '税抜金額' : '小計（税抜）'}</span>
