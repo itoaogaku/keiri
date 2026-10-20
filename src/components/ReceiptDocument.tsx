@@ -62,9 +62,6 @@ export default function ReceiptDocument({ data }: { data: ReceiptData }) {
         <span className="text-sm text-slate-500">（税込）</span>
       </div>
 
-      <div className="mt-4 text-sm text-slate-700">但し {data.note}</div>
-      <div className="mt-1 text-sm text-slate-700">上記正に領収いたしました。</div>
-
       {/* 品目の内訳 */}
       {visibleItems.length > 0 && (
         <table className="mt-6 w-full max-w-md text-sm">
@@ -84,6 +81,9 @@ export default function ReceiptDocument({ data }: { data: ReceiptData }) {
           </tbody>
         </table>
       )}
+
+      <div className="mt-4 text-sm text-slate-700">但し {data.note}</div>
+      <div className="mt-1 text-sm text-slate-700">上記正に領収いたしました。</div>
 
       {/* 内訳 */}
       <div className="mt-6 flex justify-end">
